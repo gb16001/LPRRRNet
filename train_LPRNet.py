@@ -48,12 +48,12 @@ def adjust_learning_rate(optimizer, cur_epoch, base_lr, lr_schedule):
 
 def get_parser():
     parser = argparse.ArgumentParser(description='parameters to train net')
-    parser.add_argument('--max_epoch', default=15, help='epoch to train the network')
+    parser.add_argument('--max_epoch', default=15, type=int, help='epoch to train the network')
     parser.add_argument('--img_size', default=[94, 24], help='the image size')
     parser.add_argument('--train_img_dirs', default="~/workspace/trainMixLPR", help='the train images path')
     parser.add_argument('--test_img_dirs', default="~/workspace/testMixLPR", help='the test images path')
-    parser.add_argument('--dropout_rate', default=0.5, help='dropout rate.')
-    parser.add_argument('--learning_rate', default=0.1, help='base value of learning rate.')
+    parser.add_argument('--dropout_rate', default=0.5, type=float,help='dropout rate.')
+    parser.add_argument('--learning_rate', default=0.1, type=float,help='base value of learning rate.')
     parser.add_argument('--lpr_max_len', default=8, help='license plate number max length.')
     parser.add_argument('--train_batch_size', default=128, type=int,help='training batch size.')
     parser.add_argument('--test_batch_size', default=120, type=int,help='testing batch size.')
@@ -83,7 +83,7 @@ def collate_fn(batch):
         imgs.append(torch.from_numpy(img))
         labels.extend(label)
         lengths.append(length)
-    labels = np.asarray(labels).flatten().astype(np.int)
+    labels = np.asarray(labels).flatten().astype(int)
 
     return (torch.stack(imgs, 0), torch.from_numpy(labels), lengths)
 
