@@ -1,7 +1,4 @@
 # TODO
-#
-# rewrite __getitem__
-# 多线程load data
 
 
 from torch.utils.data import *
@@ -13,10 +10,10 @@ import random
 import cv2
 import os
 import pandas as pd
-from CBLchars import CHARS, CHARS_DICT, LP_CLASS_DICT
+from .CBLchars import CHARS, CHARS_DICT, LP_CLASS_DICT
 
 
-class LPRDataLoader(Dataset):
+class CBLDataLoader(Dataset):
     def __init__(
         self, annoFile, imgSize, lpr_max_len, PreprocFun=None, shuffle: bool = False
     ):
@@ -53,29 +50,12 @@ class LPRDataLoader(Dataset):
         img_tensor = self.PreprocFun(img_int)
         label = [CHARS_DICT[c] for c in LicencePlate]
 
-        # image = cv2.imread(filename)
-        # height, width, _ = img_int.shape
-        # if height != self.img_size[1] or width != self.img_size[0]:
-        #     img_int = cv2.resize(img_int, self.img_size)
-        # img_int = self.PreprocFun(img_int)
-        # basename = os.path.basename(filename)
-        # imgname, suffix = os.path.splitext(basename)
-        # imgname = imgname.split("-")[0].split("_")[0]
-        # label = list()
-        # for c in LicencePlate:
-        #     # one_hot_base = np.zeros(len(CHARS))
-        #     # one_hot_base[CHARS_DICT[c]] = 1
-        #     label.append(CHARS_DICT[c])
-        # if len(label) == 8 and not self.check(label):
-        #     print(LicencePlate)
-        #     assert 0, "Error label ^~^!!!"
-
         return (
             img_tensor,
             label,
             len(label),
             Lp_class,
-        )  # TODO [warn]returned img used to be np, now is tensor. err may occor.
+        )
 
     # def transform(self, img):
     #     img = img.astype('float32')
@@ -120,31 +100,38 @@ def LP_class_map(
 def shuffle_pd(pd_csv):
     return pd_csv.sample(frac=1).reset_index(drop=True)
 
+
 def collate_fn(batch):
     import torch
+
     imgs = []
     labels = []
     lengths = []
-    lp_classes=[]
+    lp_classes = []
     for _, sample in enumerate(batch):
-        img, label, length ,lp_class= sample
+        img, label, length, lp_class = sample
         imgs.append(img)
         labels.extend(label)
         lengths.append(length)
         lp_classes.append(lp_class)
     labels = np.asarray(labels).flatten().astype(int)
-    
+
     return torch.stack(imgs, 0), torch.from_numpy(labels), lengths, lp_classes
 
+def CBLdata2iter(dataset:CBLDataLoader, batch_size=10, shuffle=True, num_workers=8, collate_fn=collate_fn):
+    return iter(
+        DataLoader(dataset, batch_size, shuffle, num_workers=num_workers, collate_fn=collate_fn)
+    )
+
 def test_module():
-    dataset = LPRDataLoader("data/CBLPRD-330k_v1/val.txt", [94, 24], 8)
+    dataset = CBLDataLoader("data/CBLPRD-330k_v1/val.txt", [94, 24], 8)
     one_data = dataset[10]
-    batch_iterator = iter(DataLoader(dataset, 10, shuffle=True, num_workers=8, collate_fn=collate_fn))
-    images, labels, lengths,lp_cla = next(batch_iterator)
-    
+    # dataset:list=>iter
+    batch_iterator = CBLdata2iter(dataset)
+    images, labels, lengths, lp_cla = next(batch_iterator)
     import time
     start_time = time.time()  # 记录开始时间
-    for i,batch in enumerate(batch_iterator):
+    for i, batch in enumerate(batch_iterator):
         # print(batch)
         pass
     end_time = time.time()  # 记录结束时间
@@ -152,6 +139,7 @@ def test_module():
     print(f"Elapsed time: {elapsed_time} seconds")
     return
 
+
 if __name__ == "__main__":
-    
+    test_module()
     pass
