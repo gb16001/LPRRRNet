@@ -1,5 +1,4 @@
-# TODO
-
+# TODO CBL chars is diff with old dataset
 
 from torch.utils.data import *
 from torchvision import transforms
@@ -57,13 +56,6 @@ class CBLDataLoader(Dataset):
             Lp_class,
         )
 
-    # def transform(self, img):
-    #     img = img.astype('float32')
-    #     img -= 127.5
-    #     img *= 0.0078125
-    #     img = np.transpose(img, (2, 0, 1))
-    #     return img
-
     def check(self, label):
         if (
             label[2] != CHARS_DICT["D"]
@@ -118,10 +110,20 @@ def collate_fn(batch):
 
     return torch.stack(imgs, 0), torch.from_numpy(labels), lengths, lp_classes
 
-def CBLdata2iter(dataset:CBLDataLoader, batch_size=10, shuffle=True, num_workers=8, collate_fn=collate_fn):
+
+def CBLdata2iter(
+    dataset: CBLDataLoader,
+    batch_size=10,
+    shuffle=True,
+    num_workers=8,
+    collate_fn=collate_fn,
+):
     return iter(
-        DataLoader(dataset, batch_size, shuffle, num_workers=num_workers, collate_fn=collate_fn)
+        DataLoader(
+            dataset, batch_size, shuffle, num_workers=num_workers, collate_fn=collate_fn
+        )
     )
+
 
 def test_module():
     dataset = CBLDataLoader("data/CBLPRD-330k_v1/val.txt", [94, 24], 8)
@@ -130,6 +132,7 @@ def test_module():
     batch_iterator = CBLdata2iter(dataset)
     images, labels, lengths, lp_cla = next(batch_iterator)
     import time
+
     start_time = time.time()  # 记录开始时间
     for i, batch in enumerate(batch_iterator):
         # print(batch)

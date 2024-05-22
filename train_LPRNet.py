@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 # /usr/bin/env/python3
 
-'''
-Pytorch implementation for LPRNet.
-Author: aiboy.wei@outlook.com .
-'''
 
-from data.load_data import CHARS, CHARS_DICT, LPRDataLoader
+from data import CHARS, CHARS_DICT, LPRDataLoader,CBLDataLoader,CBLdata2iter
+from data.CBLchars import CHARS as CBL_CHARS
+
 from model.LPRNet import build_lprnet
 # import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
@@ -52,6 +50,9 @@ def get_parser():
     parser.add_argument('--img_size', default=[94, 24], help='the image size')
     parser.add_argument('--train_img_dirs', default="~/workspace/trainMixLPR", help='the train images path')
     parser.add_argument('--test_img_dirs', default="~/workspace/testMixLPR", help='the test images path')
+    parser.add_argument('--is_CBL',default=True,type=bool, help="dataset is CBL dataset")
+    parser.add_argument('--CBLtrain',default="data/CBLPRD-330k_v1/train.txt", help="CBL train's anno file")
+    parser.add_argument('--CBLval',default="data/CBLPRD-330k_v1/val.txt", help="CBL val's anno file")
     parser.add_argument('--dropout_rate', default=0.5, type=float,help='dropout rate.')
     parser.add_argument('--learning_rate', default=0.1, type=float,help='base value of learning rate.')
     parser.add_argument('--lpr_max_len', default=8, help='license plate number max length.')
@@ -131,8 +132,16 @@ def train():
                          momentum=args.momentum, weight_decay=args.weight_decay)
     train_img_dirs = os.path.expanduser(args.train_img_dirs)
     test_img_dirs = os.path.expanduser(args.test_img_dirs)
-    train_dataset = LPRDataLoader(train_img_dirs.split(','), args.img_size, args.lpr_max_len)
-    test_dataset = LPRDataLoader(test_img_dirs.split(','), args.img_size, args.lpr_max_len)
+    if args.is_CBL:
+        train_dataset = CBLDataLoader(args.CBLtrain, args.img_size, args.lpr_max_len)
+        test_dataset = CBLDataLoader(args.CBLval, args.img_size, args.lpr_max_len)
+    else:
+        train_dataset = LPRDataLoader(
+            train_img_dirs.split(","), args.img_size, args.lpr_max_len
+        )
+        test_dataset = LPRDataLoader(
+            test_img_dirs.split(","), args.img_size, args.lpr_max_len
+        )
 
     epoch_size = len(train_dataset) // args.train_batch_size
     max_iter = args.max_epoch * epoch_size
@@ -147,7 +156,24 @@ def train():
     for iteration in range(start_iter, max_iter):
         if iteration % epoch_size == 0:
             # create batch iterator
-            batch_iterator = iter(DataLoader(train_dataset, args.train_batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=collate_fn))
+            batch_iterator = (
+                CBLdata2iter(
+                    train_dataset,
+                    args.train_batch_size,
+                    shuffle=True,
+                    num_workers=args.num_workers,
+                )
+                if args.is_CBL
+                else iter(
+                    DataLoader(
+                        train_dataset,
+                        args.train_batch_size,
+                        shuffle=True,
+                        num_workers=args.num_workers,
+                        collate_fn=collate_fn,
+                    )
+                )
+            )
             loss_val = 0
             epoch += 1
 
@@ -160,7 +186,10 @@ def train():
 
         start_time = time.time()
         # load train data
-        images, labels, lengths = next(batch_iterator)
+        if args.is_CBL:
+            images, labels, lengths, lp_class = next(batch_iterator)
+        else:
+            images, labels, lengths = next(batch_iterator)
         # labels = np.array([el.numpy() for el in labels]).T
         # print(labels)
         # get ctc parameters
@@ -205,7 +234,24 @@ def train():
 def Greedy_Decode_Eval(Net, datasets, args):
     # TestNet = Net.eval()
     epoch_size = len(datasets) // args.test_batch_size
-    batch_iterator = iter(DataLoader(datasets, args.test_batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=collate_fn))
+    batch_iterator = (
+                CBLdata2iter(
+                    datasets,
+                    args.test_batch_size,
+                    shuffle=True,
+                    num_workers=args.num_workers,
+                )
+                if args.is_CBL
+                else iter(
+                    DataLoader(
+                        datasets,
+                        args.test_batch_size,
+                        shuffle=True,
+                        num_workers=args.num_workers,
+                        collate_fn=collate_fn,
+                    )
+                )
+            )
 
     Tp = 0
     Tn_1 = 0
@@ -213,14 +259,17 @@ def Greedy_Decode_Eval(Net, datasets, args):
     t1 = time.time()
     for i in range(epoch_size):
         # load train data
-        images, labels, lengths = next(batch_iterator)
+        if args.is_CBL:
+            images, labels, lengths, lp_class = next(batch_iterator)
+        else:
+            images, labels, lengths = next(batch_iterator)
         start = 0
         targets = []
         for length in lengths:
             label = labels[start:start+length]
             targets.append(label)
             start += length
-        targets = np.array([el.numpy() for el in targets])
+        targets = np.array([el.numpy() for el in targets],dtype=object)
 
         if args.cuda:
             images = Variable(images.cuda())

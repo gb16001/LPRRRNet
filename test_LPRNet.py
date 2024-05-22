@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 # /usr/bin/env/python3
 
-'''
-test pretrained model.
-Author: aiboy.wei@outlook.com .
-'''
 
 from data import CHARS, CHARS_DICT, LPRDataLoader,CBLDataLoader,CBLdata2iter
 from data.CBLchars import CHARS as CBL_CHARS
@@ -91,7 +87,7 @@ def Greedy_Decode_Eval(Net, datasets, args):
             shuffle=True,
             num_workers=args.num_workers,
         )
-        if args.CBLdata
+        if args.is_CBL
         else iter(
             DataLoader(
                 datasets,
@@ -109,7 +105,10 @@ def Greedy_Decode_Eval(Net, datasets, args):
     t1 = time.time()
     for i in range(epoch_size):
         # load train data
-        images, labels, lengths, lp_class = next(batch_iterator)
+        if args.is_CBL:
+            images, labels, lengths, lp_class = next(batch_iterator)
+        else:
+            images, labels, lengths = next(batch_iterator)
         start = 0
         targets = []
         for length in lengths:
