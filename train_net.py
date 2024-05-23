@@ -163,7 +163,8 @@ def train():
         os.mkdir(args.save_folder)
     T_length = 18 # args.lpr_max_len
     epochs_num = args.max_epoch
-    loss_val = 0
+    device = torch.device("cuda:0" if args.cuda else "cpu")
+    animatior=d2l.Animator(xlabel='epoch', xlim=[1, epochs_num], legend=['train loss', 'train acc', 'test acc'])
     
     for epoch_num in range(epochs_num):
         metric = d2l.Accumulator(3)
@@ -171,7 +172,8 @@ def train():
         if epoch_num%args.epoch_p_save==0 and epoch_num!=0:
             torch.save(lprnet.state_dict(), args.save_folder + 'LPRNet_' + '_epoch_' + repr(epoch_num) + '.pth')
         if epoch_num%args.epoch_p_test==0 and epoch_num!=0:
-            Greedy_Decode_Eval(lprnet, test_dataset, args)
+            val_acc= Greedy_Decode_Eval(lprnet, test_dataset, args)
+            animatior.add(epoch_num,(None,None,val_acc))
         for i,(images, labels, lengths, lp_class)in enumerate(train_iter):
             start_time = time.time()
             # get ctc parameters
@@ -196,15 +198,16 @@ def train():
                 continue
             loss.backward()
             optimizer.step()
-            loss_val += loss.item()
             end_time = time.time()
             if i % 20 == 0:
-                print(f'Epoch: {epoch_num}/{epochs_num} || batch: {i}/{epoch_size} || Loss: {loss.item():.4f} || Batch time: {end_time - start_time:.4f} sec. || LR: {lr:.8f}')
+                print(f'Epoch: {epoch_num}/{epochs_num} || batch: {i}/{epoch_size} || Loss: {loss.item():.4f} || Batch time: {end_time - start_time:.4f} s || LR: {lr:.8f}')
+                animatior.add(epoch_num+i/epoch_size,(loss.cpu().detach().numpy(),None,None))
 
 
     # final test
     print("Final test Accuracy:")
-    Greedy_Decode_Eval(lprnet, test_dataset, args)
+    val_acc=Greedy_Decode_Eval(lprnet, test_dataset, args)
+    animatior.add(epochs_num,(None,None,val_acc))
 
     # save final parameters
     torch.save(lprnet.state_dict(), args.save_folder + 'Final_LPRNet_model.pth')
@@ -212,12 +215,12 @@ def train():
 def Greedy_Decode_Eval(Net, datasets, args):
     # TestNet = Net.eval()
     epoch_size = len(datasets) // args.test_batch_size
-    batch_iterator = CBLdata2iter(
+    batch_iterator = iter(CBLdata2iter(
         datasets,
         args.test_batch_size,
         shuffle=True,
         num_workers=args.num_workers,
-    )
+    )) 
 
     Tp = 0
     Tn_1 = 0
@@ -272,9 +275,10 @@ def Greedy_Decode_Eval(Net, datasets, args):
                 Tn_2 += 1
 
     Acc = Tp * 1.0 / (Tp + Tn_1 + Tn_2)
-    print("[Info] Test Accuracy: {} [{}:{}:{}:{}]".format(Acc, Tp, Tn_1, Tn_2, (Tp+Tn_1+Tn_2)))
+    print(f"[Info] Test Accuracy: {Acc} [{Tp}:{Tn_1}:{Tn_2}:{(Tp+Tn_1+Tn_2)}]")
     t2 = time.time()
-    print("[Info] Test Speed: {}s 1/{}]".format((t2 - t1) / len(datasets), len(datasets)))
+    print(f"[Info] Test Speed: {(t2 - t1)}s /{len(datasets)}]")
+    return Acc
 
 
 if __name__ == "__main__":

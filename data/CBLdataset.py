@@ -118,10 +118,8 @@ def CBLdata2iter(
     num_workers=8,
     collate_fn=collate_fn,
 ):
-    return iter(
-        DataLoader(
-            dataset, batch_size, shuffle, num_workers=num_workers, collate_fn=collate_fn
-        )
+    return DataLoader(
+        dataset, batch_size, shuffle, num_workers=num_workers, collate_fn=collate_fn
     )
 
 
