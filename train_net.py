@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 ''' latest train cmd
-    python train_LPRNet.py --train_img_dirs   data/test  --test_img_dirs   data/test --pretrained_model weights/origin_Final_LPRNet_model.pth --train_batch_size 256 --learning_rate 0.001 --test_interval 500 --max_epoch 1
+    python train_LPRNet.py --train_img_dirs   data/test  --test_img_dirs   data/test --pretrained_model weights/origin_Final_LPRNet_model.pth --train_batch_size 256 --learning_rate 0.001 --test_interval 500 --max_epoch 
+    train this
+    python train_net.py --train_batch_size 256 --learning_rate 0.001 --test_interval 500 --max_epoch 5
 '''
 
 from data import  CHARS_DICT, LPRDataLoader,CBLDataLoader,CBLdata2iter
@@ -42,6 +44,9 @@ def init_net_weight(lprnet,args):
         # load pretrained model
         lprnet.load_state_dict(torch.load(args.pretrained_model))
         print("load pretrained model successful!")
+    elif "only_load_backbone_weitht":
+        #TODO backbone load_state_dict,container weights_init
+        pass
     else:
         lprnet.backbone.apply(weights_init)
         lprnet.container.apply(weights_init)
@@ -139,7 +144,7 @@ def train():
     lprnet=creat_net(args)
     init_net_weight(lprnet,args)
 
-    # define optimizer
+    # define optimizer, loss
     optimizer,ctc_loss=creat_optim(lprnet,args)
 
     # ready to train
@@ -211,9 +216,8 @@ def train():
         loss_val += loss.item()
         end_time = time.time()
         if iteration % 20 == 0:
-            print('Epoch:' + repr(epoch) + ' || epochiter: ' + repr(iteration % epoch_size) + '/' + repr(epoch_size)
-                  + '|| Totel iter ' + repr(iteration) + ' || Loss: %.4f||' % (loss.item()) +
-                  'Batch time: %.4f sec. ||' % (end_time - start_time) + 'LR: %.8f' % (lr))
+            print(f'Epoch: {epoch} || epochiter: {iteration % epoch_size}/{epoch_size} || Total iter {iteration} || Loss: {loss.item():.4f} || Batch time: {end_time - start_time:.4f} sec. || LR: {lr:.8f}')
+
     # final test
     print("Final test Accuracy:")
     Greedy_Decode_Eval(lprnet, test_dataset, args)
