@@ -1,0 +1,25 @@
+max_epoch: 15
+img_size: [94, 24]
+train_img_dirs: "~/workspace/trainMixLPR"
+test_img_dirs: "~/workspace/testMixLPR"
+is_CBL: true
+CBLtrain: "data/CBLPRD-330k_v1/train.txt"
+CBLval: "data/CBLPRD-330k_v1/val.txt"
+dropout_rate: 0.5
+
+lpr_max_len: 8
+train_batch_size: 256
+test_batch_size: 120
+phase_train: True
+num_workers: 8
+cuda: True
+resume_epoch: 0
+save_interval: 2000
+test_interval: 1000
+
+learning_rate: 0.001
+momentum: 0.9
+weight_decay: 2e-5
+lr_schedule: [4, 8, 12, 14, 16]
+
+save_folder: './weights/'

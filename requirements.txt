@@ -1,0 +1,7 @@
+# Usage: pip install -r requirements.txt
+pytorch 
+python-box
+opencv-python
+mutils
+Pillow
+numpy
