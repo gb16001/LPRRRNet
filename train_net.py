@@ -20,6 +20,7 @@ import argparse
 import torch
 import time
 import os
+from d2l import torch as d2l
 
 def creat_net(args):
     lprnet = build_lprnet(lpr_max_len=args.lpr_max_len, phase=args.phase_train, class_num=len(CHARS), dropout_rate=args.dropout_rate)
@@ -44,9 +45,9 @@ def init_net_weight(lprnet,args):
         # load pretrained model
         lprnet.load_state_dict(torch.load(args.pretrained_model))
         print("load pretrained model successful!")
-    elif "only_load_backbone_weitht":
+    elif False:
         #TODO backbone load_state_dict,container weights_init
-        pass
+        None
     else:
         lprnet.backbone.apply(weights_init)
         lprnet.container.apply(weights_init)
@@ -104,7 +105,7 @@ def adjust_learning_rate(optimizer, cur_epoch, base_lr, lr_schedule):
 
 def get_parser():
     parser = argparse.ArgumentParser(description='parameters to train net')
-    parser.add_argument('--max_epoch', default=15, type=int, help='epoch to train the network')
+    parser.add_argument('--max_epoch', default=5, type=int, help='epoch to train the network')
     parser.add_argument('--img_size', default=[94, 24], help='the image size')
     parser.add_argument('--train_img_dirs', default="~/workspace/trainMixLPR", help='the train images path')
     parser.add_argument('--test_img_dirs', default="~/workspace/testMixLPR", help='the test images path')
@@ -112,9 +113,9 @@ def get_parser():
     parser.add_argument('--CBLtrain',default="data/CBLPRD-330k_v1/train.txt", help="CBL train's anno file")
     parser.add_argument('--CBLval',default="data/CBLPRD-330k_v1/val.txt", help="CBL val's anno file")
     parser.add_argument('--dropout_rate', default=0.5, type=float,help='dropout rate.')
-    parser.add_argument('--learning_rate', default=0.1, type=float,help='base value of learning rate.')
+    parser.add_argument('--learning_rate', default=0.0001, type=float,help='base value of learning rate.')
     parser.add_argument('--lpr_max_len', default=8, help='license plate number max length.')
-    parser.add_argument('--train_batch_size', default=128, type=int,help='training batch size.')
+    parser.add_argument('--train_batch_size', default=256, type=int,help='training batch size.')
     parser.add_argument('--test_batch_size', default=120, type=int,help='testing batch size.')
     parser.add_argument('--phase_train', default=True, type=bool, help='train or test phase flag.')
     parser.add_argument('--num_workers', default=8, type=int, help='Number of workers used in dataloading')
@@ -128,6 +129,8 @@ def get_parser():
     parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
     # parser.add_argument('--pretrained_model', default='./weights/Final_LPRNet_model.pth', help='pretrained base model')
     parser.add_argument('--pretrained_model', default='', help='pretrained base model')
+    parser.add_argument('--epoch_p_save', default=3)
+    parser.add_argument('--epoch_p_test', default=1)
 
     args = parser.parse_args()
 
@@ -136,87 +139,68 @@ def get_parser():
 
 def train():
     args = get_parser()
-
     # get dataset
     train_dataset,test_dataset,epoch_size,max_iter=creat_dataset(args)
-    
-    # init net
-    lprnet=creat_net(args)
-    init_net_weight(lprnet,args)
-
-    # define optimizer, loss
-    optimizer,ctc_loss=creat_optim(lprnet,args)
-
-    # ready to train
-    T_length = 18 # args.lpr_max_len
-    epoch = 0 + args.resume_epoch
-    loss_val = 0
-
-    if not os.path.exists(args.save_folder):
-        os.mkdir(args.save_folder)
-
-    if args.resume_epoch > 0:
-        start_iter = args.resume_epoch * epoch_size
-    else:
-        start_iter = 0
-
-    for iteration in range(start_iter, max_iter):
-        if iteration % epoch_size == 0:
-            # create batch iterator
-            batch_iterator = CBLdata2iter(
-                train_dataset,
+    train_iter=CBLdata2iter( train_dataset,
                 args.train_batch_size,
                 shuffle=True,
                 num_workers=args.num_workers,
             )
+    test_iter=CBLdata2iter(
+        test_dataset,
+        args.test_batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+    )
+    # init net
+    lprnet=creat_net(args)
+    init_net_weight(lprnet,args)
+    # define optimizer, loss
+    optimizer,ctc_loss=creat_optim(lprnet,args)
 
-            loss_val = 0
-            epoch += 1
-
-        if iteration !=0 and iteration % args.save_interval == 0:
-            torch.save(lprnet.state_dict(), args.save_folder + 'LPRNet_' + '_iteration_' + repr(iteration) + '.pth')
-
-        if (iteration + 1) % args.test_interval == 0:
+    # ready to train
+    if not os.path.exists(args.save_folder):
+        os.mkdir(args.save_folder)
+    T_length = 18 # args.lpr_max_len
+    epochs_num = args.max_epoch
+    loss_val = 0
+    
+    for epoch_num in range(epochs_num):
+        metric = d2l.Accumulator(3)
+        lprnet.train()
+        if epoch_num%args.epoch_p_save==0 and epoch_num!=0:
+            torch.save(lprnet.state_dict(), args.save_folder + 'LPRNet_' + '_epoch_' + repr(epoch_num) + '.pth')
+        if epoch_num%args.epoch_p_test==0 and epoch_num!=0:
             Greedy_Decode_Eval(lprnet, test_dataset, args)
-            # lprnet.train() # should be switch to train mode
+        for i,(images, labels, lengths, lp_class)in enumerate(train_iter):
+            start_time = time.time()
+            # get ctc parameters
+            input_lengths, target_lengths = sparse_tuple_for_ctc(T_length, lengths)
+            # update lr
+            lr = adjust_learning_rate(optimizer, epoch_num, args.learning_rate, args.lr_schedule)
+            if args.cuda:
+                # images.to(device)
+                # labels.to(device)
+                images=images.cuda()
+                labels=labels.cuda()
+                pass
+            # forward
+            logits = lprnet(images)
+            log_probs = logits.permute(2, 0, 1) # for ctc loss: T x N x C
+            # print(labels.shape)
+            log_probs = log_probs.log_softmax(2).requires_grad_()
+            # backprop
+            optimizer.zero_grad()
+            loss = ctc_loss(log_probs, labels, input_lengths=input_lengths, target_lengths=target_lengths)
+            if loss.item() == np.inf:
+                continue
+            loss.backward()
+            optimizer.step()
+            loss_val += loss.item()
+            end_time = time.time()
+            if i % 20 == 0:
+                print(f'Epoch: {epoch_num}/{epochs_num} || batch: {i}/{epoch_size} || Loss: {loss.item():.4f} || Batch time: {end_time - start_time:.4f} sec. || LR: {lr:.8f}')
 
-        start_time = time.time()
-        # load train data
-
-        images, labels, lengths, lp_class = next(batch_iterator)
-
-        # labels = np.array([el.numpy() for el in labels]).T
-        # print(labels)
-        # get ctc parameters
-        input_lengths, target_lengths = sparse_tuple_for_ctc(T_length, lengths)
-        # update lr
-        lr = adjust_learning_rate(optimizer, epoch, args.learning_rate, args.lr_schedule)
-
-        if args.cuda:
-            images = Variable(images, requires_grad=False).cuda()
-            labels = Variable(labels, requires_grad=False).cuda()
-        else:
-            images = Variable(images, requires_grad=False)
-            labels = Variable(labels, requires_grad=False)
-
-        # forward
-        logits = lprnet(images)
-        log_probs = logits.permute(2, 0, 1) # for ctc loss: T x N x C
-        # print(labels.shape)
-        log_probs = log_probs.log_softmax(2).requires_grad_()
-        # log_probs = log_probs.detach().requires_grad_()
-        # print(log_probs.shape)
-        # backprop
-        optimizer.zero_grad()
-        loss = ctc_loss(log_probs, labels, input_lengths=input_lengths, target_lengths=target_lengths)
-        if loss.item() == np.inf:
-            continue
-        loss.backward()
-        optimizer.step()
-        loss_val += loss.item()
-        end_time = time.time()
-        if iteration % 20 == 0:
-            print(f'Epoch: {epoch} || epochiter: {iteration % epoch_size}/{epoch_size} || Total iter {iteration} || Loss: {loss.item():.4f} || Batch time: {end_time - start_time:.4f} sec. || LR: {lr:.8f}')
 
     # final test
     print("Final test Accuracy:")
