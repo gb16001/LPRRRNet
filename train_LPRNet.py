@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # /usr/bin/env/python3
+# TODO delete this py file
 # python train_LPRNet.py --train_img_dirs   data/test  --test_img_dirs   data/test --pretrained_model weights/origin_Final_LPRNet_model.pth --train_batch_size 256 --learning_rate 0.001 --test_interval 500 --max_epoch 
 
 from data import CHARS, CHARS_DICT, LPRDataLoader,CBLDataLoader,CBLdata2iter

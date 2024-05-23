@@ -3,6 +3,8 @@
     python train_LPRNet.py --train_img_dirs   data/test  --test_img_dirs   data/test --pretrained_model weights/origin_Final_LPRNet_model.pth --train_batch_size 256 --learning_rate 0.001 --test_interval 500 --max_epoch 
     train this
     python train_net.py --train_batch_size 256 --learning_rate 0.001 --test_interval 500 --max_epoch 5
+
+    --pretrained_model weights/CBL-acc.822.pth --learning_rate 0.0001
 '''
 
 from data import  CHARS_DICT, LPRDataLoader,CBLDataLoader,CBLdata2iter
@@ -21,6 +23,7 @@ import torch
 import time
 import os
 from d2l import torch as d2l
+from dynaconf import Dynaconf
 
 def creat_net(args):
     lprnet = build_lprnet(lpr_max_len=args.lpr_max_len, phase=args.phase_train, class_num=len(CHARS), dropout_rate=args.dropout_rate)
@@ -56,7 +59,7 @@ def init_net_weight(lprnet,args):
 
 def creat_optim(lprnet,args):
     # optimizer = optim.SGD(lprnet.parameters(), lr=args.learning_rate,
-    #                       momentum=args.momentum, weight_decay=args.weight_decay)
+    # momentum=args.momentum, weight_decay=args.weight_decay)
     optimizer = optim.RMSprop(
         lprnet.parameters(),
         lr=args.learning_rate,
@@ -69,8 +72,6 @@ def creat_optim(lprnet,args):
     return optimizer,ctc_loss
 
 def creat_dataset(args):
-    train_img_dirs = os.path.expanduser(args.train_img_dirs)
-    test_img_dirs = os.path.expanduser(args.test_img_dirs)
     train_dataset = CBLDataLoader(args.CBLtrain, args.img_size, args.lpr_max_len)
     test_dataset = CBLDataLoader(args.CBLval, args.img_size, args.lpr_max_len)
     epoch_size = len(train_dataset) // args.train_batch_size
@@ -105,40 +106,16 @@ def adjust_learning_rate(optimizer, cur_epoch, base_lr, lr_schedule):
 
 def get_parser():
     parser = argparse.ArgumentParser(description='parameters to train net')
-    parser.add_argument('--max_epoch', default=5, type=int, help='epoch to train the network')
-    parser.add_argument('--img_size', default=[94, 24], help='the image size')
-    parser.add_argument('--train_img_dirs', default="~/workspace/trainMixLPR", help='the train images path')
-    parser.add_argument('--test_img_dirs', default="~/workspace/testMixLPR", help='the test images path')
-    parser.add_argument('--is_CBL',default=True,type=bool, help="dataset is CBL dataset")
-    parser.add_argument('--CBLtrain',default="data/CBLPRD-330k_v1/train.txt", help="CBL train's anno file")
-    parser.add_argument('--CBLval',default="data/CBLPRD-330k_v1/val.txt", help="CBL val's anno file")
-    parser.add_argument('--dropout_rate', default=0.5, type=float,help='dropout rate.')
-    parser.add_argument('--learning_rate', default=0.0001, type=float,help='base value of learning rate.')
-    parser.add_argument('--lpr_max_len', default=8, help='license plate number max length.')
-    parser.add_argument('--train_batch_size', default=256, type=int,help='training batch size.')
-    parser.add_argument('--test_batch_size', default=120, type=int,help='testing batch size.')
-    parser.add_argument('--phase_train', default=True, type=bool, help='train or test phase flag.')
-    parser.add_argument('--num_workers', default=8, type=int, help='Number of workers used in dataloading')
-    parser.add_argument('--cuda', default=True, type=bool, help='Use cuda to train model')
-    parser.add_argument('--resume_epoch', default=0, type=int, help='resume iter for retraining')
-    parser.add_argument('--save_interval', default=2000, type=int, help='interval for save model state dict')
-    parser.add_argument('--test_interval', default=2000, type=int, help='interval for evaluate')
-    parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-    parser.add_argument('--weight_decay', default=2e-5, type=float, help='Weight decay for SGD')
-    parser.add_argument('--lr_schedule', default=[4, 8, 12, 14, 16], help='schedule for learning rate.')
-    parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
-    # parser.add_argument('--pretrained_model', default='./weights/Final_LPRNet_model.pth', help='pretrained base model')
-    parser.add_argument('--pretrained_model', default='', help='pretrained base model')
-    parser.add_argument('--epoch_p_save', default=3)
-    parser.add_argument('--epoch_p_test', default=1)
-
+    parser.add_argument('--config_file', default='args.yaml',help='config yaml file')
     args = parser.parse_args()
 
     return args
 
 
 def train():
-    args = get_parser()
+    # args = get_parser()
+    conf_file:str=get_parser().config_file
+    args=Dynaconf(settings_files=[conf_file])
     # get dataset
     train_dataset,test_dataset,epoch_size,max_iter=creat_dataset(args)
     train_iter=CBLdata2iter( train_dataset,
@@ -201,7 +178,7 @@ def train():
             end_time = time.time()
             if i % 20 == 0:
                 print(f'Epoch: {epoch_num}/{epochs_num} || batch: {i}/{epoch_size} || Loss: {loss.item():.4f} || Batch time: {end_time - start_time:.4f} s || LR: {lr:.8f}')
-                animatior.add(epoch_num+i/epoch_size,(loss.cpu().detach().numpy(),None,None))
+                # animatior.add(epoch_num+i/epoch_size,(loss.cpu().detach().numpy(),None,None))
 
 
     # final test

@@ -1,25 +1,24 @@
-max_epoch: 15
+max_epoch: 5
 img_size: [94, 24]
-train_img_dirs: "~/workspace/trainMixLPR"
-test_img_dirs: "~/workspace/testMixLPR"
 is_CBL: true
-CBLtrain: "data/CBLPRD-330k_v1/train.txt"
-CBLval: "data/CBLPRD-330k_v1/val.txt"
-dropout_rate: 0.5
-
-lpr_max_len: 8
-train_batch_size: 256
-test_batch_size: 120
+cuda: True
 phase_train: True
 num_workers: 8
-cuda: True
-resume_epoch: 0
-save_interval: 2000
-test_interval: 1000
-
-learning_rate: 0.001
+# path
+CBLtrain: "data/CBLPRD-330k_v1/train.txt"
+CBLval: "data/CBLPRD-330k_v1/val.txt"
+pretrained_model: 'weights/CBL-acc.822.pth' #''
+save_folder: './weights/'
+# train opt.
+epoch_p_save: 3
+epoch_p_test: 1
+# learn paramaters
+train_batch_size: 256
+test_batch_size: 120
+learning_rate: 0.0001
+lr_schedule: [4, 8, 12, 14, 16]
 momentum: 0.9
 weight_decay: 2e-5
-lr_schedule: [4, 8, 12, 14, 16]
-
-save_folder: './weights/'
+# model
+dropout_rate: 0.5
+lpr_max_len: 8 #license plate number max length.
