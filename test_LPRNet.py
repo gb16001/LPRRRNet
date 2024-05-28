@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # /usr/bin/env/python3
+# TODO ready to delete this file
 
 
 from data import CHARS, CHARS_DICT, LPRDataLoader,CBLDataLoader,CBLdata2iter

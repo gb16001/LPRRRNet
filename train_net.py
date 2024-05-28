@@ -15,6 +15,8 @@ from model.LPRNet import build_lprnet
 from torch.autograd import Variable
 import torch.nn.functional as F
 from torch.utils.data import *
+from torch.utils.tensorboard import SummaryWriter
+
 from torch import optim
 import torch.nn as nn
 import numpy as np
@@ -112,9 +114,9 @@ def get_parser():
     return args
 
 
-def train():
+def train(conf_file:str):
     # args = get_parser()
-    conf_file:str=get_parser().config_file
+    # conf_file:str=get_parser().config_file
     args=Dynaconf(settings_files=[conf_file])
     # get dataset
     train_dataset,test_dataset,epoch_size,max_iter=creat_dataset(args)
@@ -141,7 +143,10 @@ def train():
     T_length = 18 # args.lpr_max_len
     epochs_num = args.max_epoch
     device = torch.device("cuda:0" if args.cuda else "cpu")
-    animatior=d2l.Animator(xlabel='epoch', xlim=[1, epochs_num], legend=['train loss', 'train acc', 'test acc'])
+    animatior=d2l.Animator(xlabel='epoch', xlim=[0, epochs_num], legend=['train loss', 'train acc', 'test acc'])
+    Tboard_writer = SummaryWriter()
+    Tboard_writer.add_graph(lprnet, torch.randn(1,3,24,94).cuda())  #模型及模型输入数据
+
     
     for epoch_num in range(epochs_num):
         metric = d2l.Accumulator(3)
@@ -151,6 +156,9 @@ def train():
         if epoch_num%args.epoch_p_test==0 and epoch_num!=0:
             val_acc= Greedy_Decode_Eval(lprnet, test_dataset, args)
             animatior.add(epoch_num,(None,None,val_acc))
+            Tboard_writer.add_scalar('train/valAcc', val_acc, epoch_num*epoch_size)
+            for name,param in lprnet.named_parameters():
+                Tboard_writer.add_histogram(name,param.clone().cpu().data.numpy(),epoch_num)
         for i,(images, labels, lengths, lp_class)in enumerate(train_iter):
             start_time = time.time()
             # get ctc parameters
@@ -178,13 +186,15 @@ def train():
             end_time = time.time()
             if i % 20 == 0:
                 print(f'Epoch: {epoch_num}/{epochs_num} || batch: {i}/{epoch_size} || Loss: {loss.item():.4f} || Batch time: {end_time - start_time:.4f} s || LR: {lr:.8f}')
-                # animatior.add(epoch_num+i/epoch_size,(loss.cpu().detach().numpy(),None,None))
+                animatior.add(epoch_num+i/epoch_size,(loss.item(),None,None))
+                Tboard_writer.add_scalar('train/loss', loss.item(), epoch_num*epoch_size+i)
 
 
     # final test
     print("Final test Accuracy:")
     val_acc=Greedy_Decode_Eval(lprnet, test_dataset, args)
     animatior.add(epochs_num,(None,None,val_acc))
+    Tboard_writer.add_scalar('train/valAcc', val_acc, epochs_num*epoch_size)
 
     # save final parameters
     torch.save(lprnet.state_dict(), args.save_folder + 'Final_LPRNet_model.pth')
@@ -259,4 +269,4 @@ def Greedy_Decode_Eval(Net, datasets, args):
 
 
 if __name__ == "__main__":
-    train()
+    train('args.yaml')
