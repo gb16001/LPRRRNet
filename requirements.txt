@@ -6,3 +6,4 @@ mutils
 Pillow
 numpy
 tensorboard
+torch-tb-profiler

@@ -15,7 +15,7 @@ epoch_p_test: 1
 # learn paramaters
 train_batch_size: 256
 test_batch_size: 120
-learning_rate: 0.0001
+learning_rate: 0.001
 lr_schedule: [4, 8, 12, 14, 16]
 momentum: 0.9
 weight_decay: 2e-5

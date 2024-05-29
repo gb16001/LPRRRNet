@@ -11,6 +11,7 @@ from data import  CHARS_DICT, LPRDataLoader,CBLDataLoader,CBLdata2iter
 from data.CBLchars import CHARS 
 
 from model.LPRNet import build_lprnet
+from model import fuckNet
 # import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 import torch.nn.functional as F
@@ -31,9 +32,11 @@ def creat_net(args):
     lprnet = build_lprnet(lpr_max_len=args.lpr_max_len, phase=args.phase_train, class_num=len(CHARS), dropout_rate=args.dropout_rate)
     device = torch.device("cuda:0" if args.cuda else "cpu")
     lprnet.to(device)
+    fucknet=fuckNet(len(CHARS))
     print("Successful to build network!")
-    return lprnet
-def weights_init(m):#TODO this func should move to moddle py
+    return  lprnet
+
+def weights_init(m):#TODO this func should move to moddle py.
     if isinstance(m, nn.Conv2d):
         nn.init.kaiming_normal_(m.weight, mode='fan_out')
         if m.bias is not None:
@@ -45,7 +48,7 @@ def weights_init(m):#TODO this func should move to moddle py
         nn.init.xavier_uniform_(m.weight)
         if m.bias is not None:
             nn.init.constant_(m.bias, 0.01)
-def init_net_weight(lprnet,args):
+def init_net_weight(lprnet:nn.Module,args):#TODO this func should move to moddle py.
     if args.pretrained_model:
         # load pretrained model
         lprnet.load_state_dict(torch.load(args.pretrained_model))
@@ -54,8 +57,11 @@ def init_net_weight(lprnet,args):
         #TODO backbone load_state_dict,container weights_init
         None
     else:
-        lprnet.backbone.apply(weights_init)
-        lprnet.container.apply(weights_init)
+        for idx,m in enumerate(lprnet.modules()):
+            m.apply(weights_init)
+        # lprnet.backbone.apply(weights_init)
+        # if hasattr(lprnet, 'container'):
+        #     lprnet.container.apply(weights_init)
         print("initial net weights successful!")
     return 
 
@@ -143,34 +149,31 @@ def train(conf_file:str):
     T_length = 18 # args.lpr_max_len
     epochs_num = args.max_epoch
     device = torch.device("cuda:0" if args.cuda else "cpu")
-    animatior=d2l.Animator(xlabel='epoch', xlim=[0, epochs_num], legend=['train loss', 'train acc', 'test acc'])
+    lprnet.to(device)
+    # animatior=d2l.Animator(xlabel='epoch', xlim=[0, epochs_num], legend=['train loss', 'train acc', 'test acc'])
     Tboard_writer = SummaryWriter()
     Tboard_writer.add_graph(lprnet, torch.randn(1,3,24,94).cuda())  #模型及模型输入数据
 
     
     for epoch_num in range(epochs_num):
-        metric = d2l.Accumulator(3)
+        # metric = d2l.Accumulator(3)
         lprnet.train()
         if epoch_num%args.epoch_p_save==0 and epoch_num!=0:
             torch.save(lprnet.state_dict(), args.save_folder + 'LPRNet_' + '_epoch_' + repr(epoch_num) + '.pth')
         if epoch_num%args.epoch_p_test==0 and epoch_num!=0:
             val_acc= Greedy_Decode_Eval(lprnet, test_dataset, args)
-            animatior.add(epoch_num,(None,None,val_acc))
+            # animatior.add(epoch_num,(None,None,val_acc))
             Tboard_writer.add_scalar('train/valAcc', val_acc, epoch_num*epoch_size)
             for name,param in lprnet.named_parameters():
                 Tboard_writer.add_histogram(name,param.clone().cpu().data.numpy(),epoch_num)
         for i,(images, labels, lengths, lp_class)in enumerate(train_iter):
             start_time = time.time()
+            images=images.to(device)
+            labels=labels.to(device)
             # get ctc parameters
             input_lengths, target_lengths = sparse_tuple_for_ctc(T_length, lengths)
             # update lr
             lr = adjust_learning_rate(optimizer, epoch_num, args.learning_rate, args.lr_schedule)
-            if args.cuda:
-                # images.to(device)
-                # labels.to(device)
-                images=images.cuda()
-                labels=labels.cuda()
-                pass
             # forward
             logits = lprnet(images)
             log_probs = logits.permute(2, 0, 1) # for ctc loss: T x N x C
@@ -186,14 +189,14 @@ def train(conf_file:str):
             end_time = time.time()
             if i % 20 == 0:
                 print(f'Epoch: {epoch_num}/{epochs_num} || batch: {i}/{epoch_size} || Loss: {loss.item():.4f} || Batch time: {end_time - start_time:.4f} s || LR: {lr:.8f}')
-                animatior.add(epoch_num+i/epoch_size,(loss.item(),None,None))
+                # animatior.add(epoch_num+i/epoch_size,(loss.item(),None,None))
                 Tboard_writer.add_scalar('train/loss', loss.item(), epoch_num*epoch_size+i)
 
 
     # final test
     print("Final test Accuracy:")
     val_acc=Greedy_Decode_Eval(lprnet, test_dataset, args)
-    animatior.add(epochs_num,(None,None,val_acc))
+    # animatior.add(epochs_num,(None,None,val_acc))
     Tboard_writer.add_scalar('train/valAcc', val_acc, epochs_num*epoch_size)
 
     # save final parameters
