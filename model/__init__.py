@@ -1,2 +1,3 @@
 from .LPRNet import *
-from .LSTM import fuckNet
+from .LSTM import myNet
+T_LENGTH:int=18

@@ -1,5 +1,6 @@
-import torch.nn as nn
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
 def rnn():
@@ -34,7 +35,13 @@ class small_basic_block(nn.Module):
         )
     def forward(self, x):
         return self.block(x)
-
+class shuffle_mobile_block(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        return
+    def forward(self,x):
+        return
+    
 class LPRNet(nn.Module):
     def __init__(self, lpr_max_len, phase, class_num, dropout_rate):
         super(LPRNet, self).__init__()
@@ -98,8 +105,8 @@ class LPRNet(nn.Module):
         logits = torch.mean(x, dim=2)
 
         return logits
-    
-class fuckNet(nn.Module):# TODO rename class
+
+class myNet(nn.Module):# TODO rename class
     def __init__(self, class_num:int) -> None:
         super().__init__()
         self.classNum=class_num
@@ -113,22 +120,114 @@ class fuckNet(nn.Module):# TODO rename class
             nn.Conv2d(27,81,3,2),
             nn.BatchNorm2d(num_features=81),
             nn.ReLU(),
-            nn.Conv2d(81,81,(1,3),1),
+            # nn.MaxPool2d((3,1),stride=1),
+            nn.Conv2d(81,81,(3,3),1,groups=9),
+            nn.BatchNorm2d(num_features=81),
+            nn.Conv2d(81,81,1,1),
             nn.BatchNorm2d(num_features=81),
             nn.ReLU(),
             nn.Conv2d(81,74,(1,3),1),
+            nn.BatchNorm2d(num_features=74),
             nn.ReLU(),
+            nn.Flatten(2,3),
         )
+        self.line=nn.Linear(36,18) 
         return
-    def forward(self,x):
+    def forward(self,x:torch.Tensor):
         x=self.backbone(x)
-        logits = torch.mean(x, dim=2)
-        return logits
+        logits=self.line(x)
+        # logits = torch.mean(x, dim=2)
+        # logits = x.flatten(2,3)
+        return logits #softmax to property
 
-if __name__=="__main__":
-    # net= LPRNet(lpr_max_len=18, phase=False, class_num=74, dropout_rate=0.5)
-    net=fuckNet(class_num=74)
+def test():
+    net=myNet(class_num=74)
     x=torch.randn(1,3,24,94)
     y_hat=net(x)
     print(y_hat.size())
+    return
+
+
+
+# ShuffleNet Block
+class ShuffleNetBlock(nn.Module):
+    def __init__(self, inp, oup, stride):
+        super(ShuffleNetBlock, self).__init__()
+        self.stride = stride
+        branch_features = oup // 2
+        assert (self.stride != 1) or (inp == branch_features * 2)
+
+        if self.stride > 1:
+            self.branch1 = nn.Sequential(
+                nn.Conv2d(inp, inp, 3, stride, 1, groups=inp, bias=False),
+                nn.BatchNorm2d(inp),
+                nn.Conv2d(inp, branch_features, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(branch_features),
+                nn.ReLU(inplace=True),
+            )
+        else:
+            self.branch1 = nn.Sequential()
+
+        self.branch2 = nn.Sequential(
+            nn.Conv2d(inp if self.stride > 1 else branch_features, branch_features, 1, 1, 0, bias=False),
+            nn.BatchNorm2d(branch_features),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(branch_features, branch_features, 3, stride, 1, groups=branch_features, bias=False),
+            nn.BatchNorm2d(branch_features),
+            nn.Conv2d(branch_features, branch_features, 1, 1, 0, bias=False),
+            nn.BatchNorm2d(branch_features),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x:torch.Tensor):
+        if self.stride > 1:
+            x1 = self.branch1(x)
+            x2 = self.branch2(x)
+        else:
+            x1, x2 = x.chunk(2, dim=1)
+            x2 = self.branch2(x2)
+        out = torch.cat((x1, x2), 1)
+        out = F.channel_shuffle(out, 2)
+        return out
+
+
+# MobileNet Block
+class MobileNetBlock(nn.Module):
+    def __init__(self, inp, oup, stride):
+        super(MobileNetBlock, self).__init__()
+        self.stride = stride
+        self.block = nn.Sequential(
+            nn.Conv2d(inp, inp, 3, stride, 1, groups=inp, bias=False),
+            nn.BatchNorm2d(inp),
+            nn.Conv2d(inp, oup, 1, 1, 0, bias=False),
+            nn.BatchNorm2d(oup),
+            nn.ReLU(inplace=True),
+        )
+        return
+
+    def forward(self, x):
+        
+        return self.block(x)
+
+def test_shuffle_mobile():
+    # Example Usage:
+    # Define input tensor
+    inp_tensor = torch.randn(1, 24, 56, 56)
+
+    # Create ShuffleNet block
+    shuffle_block = ShuffleNetBlock(inp=24, oup=48, stride=1)
+    shuffle_output = shuffle_block(inp_tensor)
+
+    # Create MobileNet block
+    mobile_block = MobileNetBlock(inp=24, oup=48, stride=2)
+    mobile_output = mobile_block(inp_tensor)
+
+    print("ShuffleNet Block Output Shape:", shuffle_output.shape)
+    print("MobileNet Block Output Shape:", mobile_output.shape)
+    return
+
+
+if __name__=="__main__":
+    # net= LPRNet(lpr_max_len=18, phase=False, class_num=74, dropout_rate=0.5)
+    test()
     pass

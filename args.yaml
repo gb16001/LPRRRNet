@@ -1,4 +1,4 @@
-max_epoch: 5
+
 img_size: [94, 24]
 is_CBL: true
 cuda: True
@@ -7,14 +7,18 @@ num_workers: 8
 # path
 CBLtrain: "data/CBLPRD-330k_v1/train.txt"
 CBLval: "data/CBLPRD-330k_v1/val.txt"
-pretrained_model: '' #'weights/CBL-acc.822.pth'
+pretrained_model: weights/linear-10e-.846acc.pth #'weights/CBL-acc.822.pth' ''
 save_folder: './weights/'
+tb_log_dir: runs/May30_16-34-32_willing-MS-7A38  # 'runs/May29_10-53-54_willing-MS-7A38' null
 # train opt.
+# max_epoch: 5
+init_epoch: 10
+add_epochs: 5
 epoch_p_save: 3
 epoch_p_test: 1
 # learn paramaters
 train_batch_size: 256
-test_batch_size: 120
+test_batch_size: 256
 learning_rate: 0.001
 lr_schedule: [4, 8, 12, 14, 16]
 momentum: 0.9
