@@ -105,6 +105,52 @@ class LPRNet(nn.Module):
         logits = torch.mean(x, dim=2)
 
         return logits
+class GRU_ende_res(nn.Module):
+    def __init__(self, class_num:int) -> None:
+        super().__init__()
+        self.classNum=class_num
+        self.backbone=nn.Sequential(
+            nn.Conv2d(3,9,3,1),
+            nn.BatchNorm2d(num_features=9),
+            nn.ReLU(),
+            nn.Conv2d(9,27,3,2),
+            nn.BatchNorm2d(num_features=27),
+            nn.ReLU(),
+            nn.Conv2d(27,81,3,2),
+            nn.BatchNorm2d(num_features=81),
+            nn.ReLU(),
+            # nn.MaxPool2d((3,1),stride=1),
+            nn.Conv2d(81,81,(3,3),1,groups=9),
+            nn.BatchNorm2d(num_features=81),
+            nn.Conv2d(81,81,1,1),
+            nn.BatchNorm2d(num_features=81),
+            nn.ReLU(),
+            nn.Conv2d(81,74,(1,3),1),
+            nn.BatchNorm2d(num_features=74),
+            nn.ReLU(),
+            nn.Flatten(2,3),
+            nn.Linear(36,18),
+            nn.BatchNorm1d(num_features=74),
+            nn.ReLU(),
+        )
+        self.rnn_encoder=nn.GRU(74,74,bidirectional=True)
+        self.rnn_decoder=nn.GRU(74,74,bidirectional=True)
+        self.linear2=nn.Linear(74*2,74,)
+        self.normL2=nn.BatchNorm1d(74)
+        return
+    def forward(self,x:torch.Tensor):
+        logits_s=self.backbone(x)
+        
+        logits_t=logits_s.permute(2,0,1).contiguous()
+        _,hidden_0=self.rnn_encoder(logits_t)
+        y_hat,_=self.rnn_decoder(logits_t,hidden_0)
+
+        y_hat=y_hat.permute(1,0,2)
+        y_hat=self.linear2(y_hat)
+        y_hat=y_hat.permute(0,2,1)
+        y_hat=self.normL2(y_hat)
+        y_hat=F.relu(y_hat)
+        return y_hat+logits_s #softmax to property
 
 class myNet(nn.Module):# TODO rename class
     def __init__(self, class_num:int) -> None:
@@ -130,29 +176,32 @@ class myNet(nn.Module):# TODO rename class
             nn.BatchNorm2d(num_features=74),
             nn.ReLU(),
             nn.Flatten(2,3),
+            nn.Linear(36,18),
+            nn.BatchNorm1d(num_features=74),
+            nn.ReLU(),
         )
-        self.linear1=nn.Linear(36,18)
         self.rnn_encoder=nn.GRU(74,74,bidirectional=True)
         self.rnn_decoder=nn.GRU(74,74,bidirectional=True)
         self.linear2=nn.Linear(74*2,74,)
+        self.normL2=nn.BatchNorm1d(74)
         return
     def forward(self,x:torch.Tensor):
-        x=self.backbone(x)
-        logits_s:torch.Tensor=self.linear1(x)
-        logits_s=F.relu(logits_s)
+        logits_s=self.backbone(x)
+        
         logits_t=logits_s.permute(2,0,1).contiguous()
         _,hidden_0=self.rnn_encoder(logits_t)
         y_hat,_=self.rnn_decoder(logits_t,hidden_0)
-        
+
         y_hat=y_hat.permute(1,0,2)
         y_hat=self.linear2(y_hat)
         y_hat=y_hat.permute(0,2,1)
+        y_hat=self.normL2(y_hat)
         y_hat=F.relu(y_hat)
         return y_hat+logits_s #softmax to property
 
 def test():
     net=myNet(class_num=74)
-    x=torch.randn(1,3,24,94)
+    x=torch.randn(64,3,24,94)
     y_hat=net(x)
     print(y_hat.size())
     return
