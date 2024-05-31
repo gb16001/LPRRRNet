@@ -7,12 +7,12 @@ num_workers: 8
 # path
 CBLtrain: "data/CBLPRD-330k_v1/train.txt"
 CBLval: "data/CBLPRD-330k_v1/val.txt"
-pretrained_model: weights/linear-10e-.846acc.pth #'weights/CBL-acc.822.pth' ''
+pretrained_model: weights/rnned-5e-.9347acc.pth #'weights/CBL-acc.822.pth' ''
 save_folder: './weights/'
-tb_log_dir: runs/May30_16-34-32_willing-MS-7A38  # 'runs/May29_10-53-54_willing-MS-7A38' null
+tb_log_dir: runs/May31_10-23-15_willing-MS-7A38  # 'runs/May29_10-53-54_willing-MS-7A38' null
 # train opt.
 # max_epoch: 5
-init_epoch: 10
+init_epoch: 5
 add_epochs: 5
 epoch_p_save: 3
 epoch_p_test: 1

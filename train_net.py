@@ -311,5 +311,5 @@ def Greedy_Decode_Eval(Net, testIter, args):
 
 
 if __name__ == "__main__":
-    # train('args.yaml')
-    evaluate('args.yaml')
+    train('args.yaml')
+    # evaluate('args.yaml')

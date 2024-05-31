@@ -131,14 +131,24 @@ class myNet(nn.Module):# TODO rename class
             nn.ReLU(),
             nn.Flatten(2,3),
         )
-        self.line=nn.Linear(36,18) 
+        self.linear1=nn.Linear(36,18)
+        self.rnn_encoder=nn.GRU(74,74,bidirectional=True)
+        self.rnn_decoder=nn.GRU(74,74,bidirectional=True)
+        self.linear2=nn.Linear(74*2,74,)
         return
     def forward(self,x:torch.Tensor):
         x=self.backbone(x)
-        logits=self.line(x)
-        # logits = torch.mean(x, dim=2)
-        # logits = x.flatten(2,3)
-        return logits #softmax to property
+        logits_s:torch.Tensor=self.linear1(x)
+        logits_s=F.relu(logits_s)
+        logits_t=logits_s.permute(2,0,1).contiguous()
+        _,hidden_0=self.rnn_encoder(logits_t)
+        y_hat,_=self.rnn_decoder(logits_t,hidden_0)
+        
+        y_hat=y_hat.permute(1,0,2)
+        y_hat=self.linear2(y_hat)
+        y_hat=y_hat.permute(0,2,1)
+        y_hat=F.relu(y_hat)
+        return y_hat+logits_s #softmax to property
 
 def test():
     net=myNet(class_num=74)
