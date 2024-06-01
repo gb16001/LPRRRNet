@@ -204,6 +204,58 @@ class GRU_2l_en_1l_de_res_(nn.Module):
         y_hat=F.relu(y_hat)
         return y_hat+logits_1s #softmax to property
 
+class shuff_mob_gru(nn.Module):
+    def __init__(self, class_num:int) -> None:
+        super().__init__()
+        self.classNum=class_num
+        self.backbone=nn.Sequential(
+            nn.Conv2d(3,9,3,1),
+            nn.BatchNorm2d(num_features=9),
+            nn.ReLU(),
+            nn.Conv2d(9,27,3,2),
+            nn.BatchNorm2d(num_features=27),
+            nn.ReLU(),
+            nn.Conv2d(27,81,3,2),
+            nn.BatchNorm2d(num_features=81),
+            nn.ReLU(),
+            # nn.MaxPool2d((3,1),stride=1),
+            nn.Conv2d(81,81,(3,3),1,groups=9),
+            nn.BatchNorm2d(num_features=81),
+            nn.Conv2d(81,81,1,1),
+            nn.BatchNorm2d(num_features=81),
+            nn.ReLU(),
+            nn.Conv2d(81,class_num,(1,3),1),
+            nn.BatchNorm2d(num_features=class_num),
+            nn.ReLU(),
+            nn.Flatten(2,3),
+            
+        )
+        self.linear1 = nn.Sequential(
+            nn.Linear(36, 18),
+            nn.BatchNorm1d(num_features=class_num),
+            nn.ReLU(),
+        )
+        self.rnn_encoder=nn.GRU(class_num,class_num,bidirectional=True)
+        self.rnn_decoder=nn.GRU(class_num,class_num,bidirectional=True)
+        self.linear2=nn.Linear(class_num*2,class_num,)
+        self.normL2=nn.BatchNorm1d(class_num)
+        return
+    def forward(self,x:torch.Tensor):
+        logits_2s=self.backbone(x)
+        logits_1s=self.linear1(logits_2s)
+        logits_2t=logits_2s.permute(2,0,1).contiguous()
+        logits_1t=logits_1s.permute(2,0,1).contiguous()
+        _,hidden_0=self.rnn_encoder(logits_2t)
+        
+        y_hat,_=self.rnn_decoder(logits_1t,hidden_0)
+
+        y_hat=y_hat.permute(1,0,2)
+        y_hat=self.linear2(y_hat)
+        y_hat=y_hat.permute(0,2,1)
+        y_hat=self.normL2(y_hat)
+        y_hat=F.relu(y_hat)
+        return y_hat+logits_1s #softmax to property
+
 class myNet(nn.Module):# TODO rename class
     def __init__(self, class_num:int) -> None:
         super().__init__()
@@ -224,21 +276,21 @@ class myNet(nn.Module):# TODO rename class
             nn.Conv2d(81,81,1,1),
             nn.BatchNorm2d(num_features=81),
             nn.ReLU(),
-            nn.Conv2d(81,74,(1,3),1),
-            nn.BatchNorm2d(num_features=74),
+            nn.Conv2d(81,class_num,(1,3),1),
+            nn.BatchNorm2d(num_features=class_num),
             nn.ReLU(),
             nn.Flatten(2,3),
             
         )
         self.linear1 = nn.Sequential(
             nn.Linear(36, 18),
-            nn.BatchNorm1d(num_features=74),
+            nn.BatchNorm1d(num_features=class_num),
             nn.ReLU(),
         )
-        self.rnn_encoder=nn.GRU(74,74,bidirectional=True)
-        self.rnn_decoder=nn.GRU(74,74,bidirectional=True)
-        self.linear2=nn.Linear(74*2,74,)
-        self.normL2=nn.BatchNorm1d(74)
+        self.rnn_encoder=nn.GRU(class_num,class_num,bidirectional=True)
+        self.rnn_decoder=nn.GRU(class_num,class_num,bidirectional=True)
+        self.linear2=nn.Linear(class_num*2,class_num,)
+        self.normL2=nn.BatchNorm1d(class_num)
         return
     def forward(self,x:torch.Tensor):
         logits_2s=self.backbone(x)
@@ -256,13 +308,51 @@ class myNet(nn.Module):# TODO rename class
         y_hat=F.relu(y_hat)
         return y_hat+logits_1s #softmax to property
 
-def test():
+def __test():
     net=myNet(class_num=74)
     x=torch.randn(64,3,24,94)
     y_hat=net(x)
     print(y_hat.size())
     return
 
+
+class Shuffle_Mobile_Block(nn.Module): # img transfer
+    def __init__(self, channels, groups) -> None:
+        super().__init__()
+        self.block=nn.Sequential(
+            nn.Conv2d(channels,channels,3,1,1,groups=groups),
+            ChannelShuffle(groups),
+            nn.Conv2d(channels,channels,3,1,1),
+            nn.Conv2d(channels,channels,1,1),
+            nn.BatchNorm2d(channels),
+            nn.ReLU(),
+        )
+        return
+
+    def forward(self, x: torch.Tensor):
+        out = x + self.block(x)
+        return out
+class ChannelShuffle(nn.Module):
+    def __init__(self, groups):
+        super(ChannelShuffle, self).__init__()
+        self.groups = groups
+
+    def forward(self, x):
+        batchsize, num_channels, height, width = x.size()
+        channels_per_group = num_channels // self.groups
+        # Reshape
+        x = x.view(batchsize, self.groups, channels_per_group, height, width)
+        # Transpose
+        x = x.transpose(1, 2).contiguous()
+        # Flatten
+        x = x.view(batchsize, -1, height, width)
+        return x
+def __test_block():
+    block=Shuffle_Mobile_Block(27,9)
+    x=torch.randn(2,27,24,94)
+    y=block(x)
+    print(y.size())
+    return
 
 # ShuffleNet Block
 class ShuffleNetBlock(nn.Module):
@@ -324,7 +414,7 @@ class MobileNetBlock(nn.Module):
         
         return self.block(x)
 
-def test_shuffle_mobile():
+def __test_shuffle_mobile():
     # Example Usage:
     # Define input tensor
     inp_tensor = torch.randn(1, 24, 56, 56)
@@ -341,8 +431,17 @@ def test_shuffle_mobile():
     print("MobileNet Block Output Shape:", mobile_output.shape)
     return
 
-
+def __compair_shuffle():
+    x= torch.randn(2,8,10,20)
+    torch_m=nn.ChannelShuffle(4)
+    my_m=ChannelShuffle(4)
+    compare=torch.equal(torch_m(x),my_m(x))
+    print(f"nn.ChannelShuffle==ChannelShuffle: {compare}")
+    return compare
 if __name__=="__main__":
     # net= LPRNet(lpr_max_len=18, phase=False, class_num=74, dropout_rate=0.5)
-    test()
+    __test()
+    # test_block()
+    
+    
     pass
