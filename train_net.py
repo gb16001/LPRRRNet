@@ -118,36 +118,7 @@ def get_parser():
 
     return args
 
-def evaluate(conf_file:str):
-    args=Dynaconf(settings_files=[conf_file])
-    train_dataset,test_dataset,epoch_size=creat_dataset(args)
 
-    # statistic dataset
-    series=test_dataset.anno_csv.iloc[:,2]
-    lp_clc_freq = series.value_counts()
-    print(lp_clc_freq)
-
-    test_iter=CBLdata2iter(
-        test_dataset,
-        args.test_batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-    )
-    device = torch.device("cuda:0" if args.cuda else "cpu")
-    net=creat_net(args).to(device)
-    assert args.pretrained_model!= ''
-    init_net_weight(net,args)
-    Greedy_Decode_Eval(net,test_iter,args)
-    # err analyze
-    
-    Tn1_clc_np,Tn2_clc_np=np.array(Tn1_lp_clc),np.array(Tn2_lp_clc)
-    values, counts = np.unique(Tn1_clc_np, return_counts=True)
-    err1_freq = dict(zip(LP_CLASS, counts/lp_clc_freq[values]))
-    print(f'len err:{err1_freq}')
-    values, counts = np.unique(Tn2_clc_np, return_counts=True)
-    err2_freq = dict(zip(LP_CLASS, counts/lp_clc_freq[values]))
-    print(f'char err:{err2_freq}')
-    return
 
 def train(conf_file:str):
     # args = get_parser()
@@ -268,22 +239,18 @@ def greedy_decode(prebs,):
     return preb_labels
 
 import numpy as np
-Tn1_lp_clc = []
-Tn2_lp_clc = []
 def check_lables(preb_labels,targets,lp_class,*Tn):
     Tp,Tn_1,Tn_2=Tn
     for i, label in enumerate(preb_labels):
         if len(label) != len(targets[i]):
             Tn_1 += 1
             # print(f"{lp_class[i]}")
-            Tn1_lp_clc.append(lp_class[i])
             continue
         if (np.asarray(targets[i]) == np.asarray(label)).all():
             Tp += 1
         else:
             Tn_2 += 1
             # print(f"{label}|{targets[i]}")
-            Tn2_lp_clc.append(lp_class[i])
     return Tp, Tn_1, Tn_2
     
 
@@ -299,8 +266,6 @@ def Greedy_Decode_Eval(Net, testIter, args):
         prebs = Net(images)
         preb_labels=greedy_decode(prebs)
         Tp,Tn_1,Tn_2=check_lables(preb_labels,targets,lp_class,Tp,Tn_1,Tn_2)
-
-    
 
     Acc = Tp * 1.0 / (Tp + Tn_1 + Tn_2)
     print(f"[Info] Test Accuracy: {Acc} [{Tp}:{Tn_1}:{Tn_2}:{(Tp+Tn_1+Tn_2)}]")

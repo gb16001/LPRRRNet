@@ -1,0 +1,29 @@
+cuda: True
+num_workers: 8
+test_batch_size: 256
+pretrained_model: weights/shuff_mob_gru-10e-.948acc.pth 
+
+img_size: [94, 24]
+is_CBL: true
+
+# path
+CBLtrain: "data/CBLPRD-330k_v1/train.txt"
+CBLval: "data/CBLPRD-330k_v1/val.txt"
+save_folder: './weights/'
+tb_log_dir: null  # 'runs/May29_10-53-54_willing-MS-7A38' null
+# train opt.
+# max_epoch: 5
+init_epoch: 0
+add_epochs: 10
+epoch_p_save: 3
+epoch_p_test: 1
+# learn paramaters
+train_batch_size: 256
+
+learning_rate: 0.001
+lr_schedule: [4, 8, 12, 14, 16]
+momentum: 0.9
+weight_decay: 2e-5
+# model
+dropout_rate: 0.5
+lpr_max_len: 8 #license plate number max length.
