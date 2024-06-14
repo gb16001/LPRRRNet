@@ -2,7 +2,6 @@
 img_size: [94, 24]
 is_CBL: true
 cuda: True
-phase_train: True
 num_workers: 8
 # path
 CBLtrain: "data/CBLPRD-330k_v1/train.txt"

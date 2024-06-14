@@ -130,4 +130,4 @@ class eval_Net:
 
 if __name__ == "__main__":
 
-    evaluate("args.yaml")
+    evaluate("args_eval.yaml")

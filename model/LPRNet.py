@@ -17,9 +17,8 @@ class small_basic_block(nn.Module):
         return self.block(x)
 
 class LPRNet(nn.Module):
-    def __init__(self, lpr_max_len, phase, class_num, dropout_rate):
+    def __init__(self, lpr_max_len, class_num, dropout_rate):
         super(LPRNet, self).__init__()
-        self.phase = phase
         self.lpr_max_len = lpr_max_len
         self.class_num = class_num
         self.backbone = nn.Sequential(
@@ -79,11 +78,8 @@ class LPRNet(nn.Module):
 
         return logits
 
-def build_lprnet(lpr_max_len=8, phase=False, class_num=66, dropout_rate=0.5):
+def build_lprnet(lpr_max_len=8, class_num=66, dropout_rate=0.5):
 
-    Net = LPRNet(lpr_max_len, phase, class_num, dropout_rate)
-
-    if phase == "train":
-        return Net.train()
-    else:
-        return Net.eval()
+    Net = LPRNet(lpr_max_len, class_num, dropout_rate)
+    return Net.train()
+    

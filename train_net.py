@@ -29,7 +29,7 @@ from d2l import torch as d2l
 from dynaconf import Dynaconf
 
 def creat_net(args):
-    lprnet = build_lprnet(lpr_max_len=args.lpr_max_len, phase=args.phase_train, class_num=len(CHARS), dropout_rate=args.dropout_rate)
+    lprnet = build_lprnet(lpr_max_len=args.lpr_max_len, class_num=len(CHARS), dropout_rate=args.dropout_rate)
     device = torch.device("cuda:0" if args.cuda else "cpu")
     lprnet.to(device)
     mynet=myNet(len(CHARS))
