@@ -35,12 +35,7 @@ class small_basic_block(nn.Module):
         )
     def forward(self, x):
         return self.block(x)
-class shuffle_mobile_block(nn.Module):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        return
-    def forward(self,x):
-        return
+
 
 class LPRNet(nn.Module):
     def __init__(self, lpr_max_len, phase, class_num, dropout_rate):
@@ -256,7 +251,7 @@ class shuff_mob_gru(nn.Module):
         y_hat=F.relu(y_hat)
         return y_hat+logits_1s #softmax to property
 
-class myNet(nn.Module):# TODO rename class
+class LPRRRNet(nn.Module):
     def __init__(self, class_num:int) -> None:
         super().__init__()
         self.classNum=class_num
@@ -309,7 +304,7 @@ class myNet(nn.Module):# TODO rename class
         return y_hat+logits_1s #softmax to property
 
 def __test():
-    net=myNet(class_num=74)
+    net=LPRRRNet(class_num=74)
     x=torch.randn(64,3,24,94)
     y_hat=net(x)
     print(y_hat.size())
@@ -438,6 +433,34 @@ def __compair_shuffle():
     compare=torch.equal(torch_m(x),my_m(x))
     print(f"nn.ChannelShuffle==ChannelShuffle: {compare}")
     return compare
+
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        nn.init.kaiming_normal_(m.weight, mode='fan_out')
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0.01)
+    elif isinstance(m, nn.BatchNorm2d):
+        nn.init.constant_(m.weight, 1)
+        nn.init.constant_(m.bias, 0)
+    elif isinstance(m, nn.Linear):
+        nn.init.xavier_uniform_(m.weight)
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0.01)
+
+def init_net_weight(lprnet:nn.Module,args):
+    if args.pretrained_model:
+        # load pretrained model
+        lprnet.load_state_dict(torch.load(args.pretrained_model))
+        print("load pretrained model successful!")
+    elif False:
+        #TODO backbone load_state_dict,container weights_init
+        None
+    else:
+        for idx,m in enumerate(lprnet.modules()):
+            m.apply(weights_init)        
+        print("initial net weights successful!")
+    return 
+
 if __name__=="__main__":
     # net= LPRNet(lpr_max_len=18, phase=False, class_num=74, dropout_rate=0.5)
     __test()

@@ -11,7 +11,7 @@ from data import  CHARS_DICT, LPRDataLoader,CBLDataLoader,CBLdata2iter
 from data.CBLchars import CHARS ,LP_CLASS
 
 from model.LPRNet import build_lprnet
-from model import myNet,T_LENGTH
+from model import LPRRRNet,T_LENGTH,init_net_weight
 # import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 import torch.nn.functional as F
@@ -32,38 +32,11 @@ def creat_net(args):
     lprnet = build_lprnet(lpr_max_len=args.lpr_max_len, class_num=len(CHARS), dropout_rate=args.dropout_rate)
     device = torch.device("cuda:0" if args.cuda else "cpu")
     lprnet.to(device)
-    mynet=myNet(len(CHARS))
+    mynet=LPRRRNet(len(CHARS))
     print("Successful to build network!")
     return  mynet
 
-def weights_init(m):#TODO this func should move to moddle py.
-    if isinstance(m, nn.Conv2d):
-        nn.init.kaiming_normal_(m.weight, mode='fan_out')
-        if m.bias is not None:
-            nn.init.constant_(m.bias, 0.01)
-    elif isinstance(m, nn.BatchNorm2d):
-        nn.init.constant_(m.weight, 1)
-        nn.init.constant_(m.bias, 0)
-    elif isinstance(m, nn.Linear):
-        nn.init.xavier_uniform_(m.weight)
-        if m.bias is not None:
-            nn.init.constant_(m.bias, 0.01)
-def init_net_weight(lprnet:nn.Module,args):#TODO this func should move to moddle py.
-    if args.pretrained_model:
-        # load pretrained model
-        lprnet.load_state_dict(torch.load(args.pretrained_model))
-        print("load pretrained model successful!")
-    elif False:
-        #TODO backbone load_state_dict,container weights_init
-        None
-    else:
-        for idx,m in enumerate(lprnet.modules()):
-            m.apply(weights_init)
-        # lprnet.backbone.apply(weights_init)
-        # if hasattr(lprnet, 'container'):
-        #     lprnet.container.apply(weights_init)
-        print("initial net weights successful!")
-    return 
+
 
 def creat_optim(lprnet,args):
     # optimizer = optim.SGD(lprnet.parameters(), lr=args.learning_rate,
