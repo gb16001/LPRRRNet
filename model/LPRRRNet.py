@@ -3,23 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def rnn():
-    # rnn=nn.LSTM(input_size=74,hidden_size=512)
-    rnn=nn.GRU(input_size=74,hidden_size=512,bidirectional=False,device=None)
-    rnn.eval()
-    h_0=torch.randn([1,512])# bio*layers,N,ch
-    in_vect=torch.randn([10,74])# L,N,ch
-    out_vect,h_n=rnn(in_vect)
-    print(out_vect.size(),h_n.size(),torch.equal(out_vect[-1],h_n[0]))
-    return
-
-def trans():
-    transformer_model=nn.Transformer(norm_first=True)
-    src = torch.rand((10, 32, 512))
-    tgt = torch.rand((20, 32, 512))
-    out = transformer_model(src, tgt)
-    print(out.size())
-    return
 
 class small_basic_block(nn.Module):
     def __init__(self, ch_in, ch_out):
@@ -349,83 +332,6 @@ def __test_block():
     print(y.size())
     return
 
-# ShuffleNet Block
-class ShuffleNetBlock(nn.Module):
-    def __init__(self, inp, oup, stride):
-        super(ShuffleNetBlock, self).__init__()
-        self.stride = stride
-        branch_features = oup // 2
-        assert (self.stride != 1) or (inp == branch_features * 2)
-
-        if self.stride > 1:
-            self.branch1 = nn.Sequential(
-                nn.Conv2d(inp, inp, 3, stride, 1, groups=inp, bias=False),
-                nn.BatchNorm2d(inp),
-                nn.Conv2d(inp, branch_features, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(branch_features),
-                nn.ReLU(inplace=True),
-            )
-        else:
-            self.branch1 = nn.Sequential()
-
-        self.branch2 = nn.Sequential(
-            nn.Conv2d(inp if self.stride > 1 else branch_features, branch_features, 1, 1, 0, bias=False),
-            nn.BatchNorm2d(branch_features),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(branch_features, branch_features, 3, stride, 1, groups=branch_features, bias=False),
-            nn.BatchNorm2d(branch_features),
-            nn.Conv2d(branch_features, branch_features, 1, 1, 0, bias=False),
-            nn.BatchNorm2d(branch_features),
-            nn.ReLU(inplace=True),
-        )
-
-    def forward(self, x:torch.Tensor):
-        if self.stride > 1:
-            x1 = self.branch1(x)
-            x2 = self.branch2(x)
-        else:
-            x1, x2 = x.chunk(2, dim=1)
-            x2 = self.branch2(x2)
-        out = torch.cat((x1, x2), 1)
-        out = F.channel_shuffle(out, 2)
-        return out
-
-
-# MobileNet Block
-class MobileNetBlock(nn.Module):
-    def __init__(self, inp, oup, stride):
-        super(MobileNetBlock, self).__init__()
-        self.stride = stride
-        self.block = nn.Sequential(
-            nn.Conv2d(inp, inp, 3, stride, 1, groups=inp, bias=False),
-            nn.BatchNorm2d(inp),
-            nn.Conv2d(inp, oup, 1, 1, 0, bias=False),
-            nn.BatchNorm2d(oup),
-            nn.ReLU(inplace=True),
-        )
-        return
-
-    def forward(self, x):
-        
-        return self.block(x)
-
-def __test_shuffle_mobile():
-    # Example Usage:
-    # Define input tensor
-    inp_tensor = torch.randn(1, 24, 56, 56)
-
-    # Create ShuffleNet block
-    shuffle_block = ShuffleNetBlock(inp=24, oup=48, stride=1)
-    shuffle_output = shuffle_block(inp_tensor)
-
-    # Create MobileNet block
-    mobile_block = MobileNetBlock(inp=24, oup=48, stride=2)
-    mobile_output = mobile_block(inp_tensor)
-
-    print("ShuffleNet Block Output Shape:", shuffle_output.shape)
-    print("MobileNet Block Output Shape:", mobile_output.shape)
-    return
-
 def __compair_shuffle():
     x= torch.randn(2,8,10,20)
     torch_m=nn.ChannelShuffle(4)
@@ -434,7 +340,11 @@ def __compair_shuffle():
     print(f"nn.ChannelShuffle==ChannelShuffle: {compare}")
     return compare
 
-def weights_init(m):
+
+
+
+
+def norm_init_weights(m):# normalize init weight
     if isinstance(m, nn.Conv2d):
         nn.init.kaiming_normal_(m.weight, mode='fan_out')
         if m.bias is not None:
@@ -457,7 +367,7 @@ def init_net_weight(lprnet:nn.Module,args):
         None
     else:
         for idx,m in enumerate(lprnet.modules()):
-            m.apply(weights_init)        
+            m.apply(norm_init_weights)        
         print("initial net weights successful!")
     return 
 
@@ -465,6 +375,4 @@ if __name__=="__main__":
     # net= LPRNet(lpr_max_len=18, phase=False, class_num=74, dropout_rate=0.5)
     __test()
     # test_block()
-    
-    
     pass

@@ -74,9 +74,10 @@ class eval_Net:
             preb_labels.append(no_repeat_blank_label)
         return preb_labels
 
-    def check_lables(self, preb_labels, targets, lp_class, *Tn):
+    def check_lables(self, preb_labels, targets, lp_class, *Tn,require_showLable=False):
         Tp, Tn_1, Tn_2 = Tn
         for i, label in enumerate(preb_labels):
+            self.show_lables(label, targets[i]) if require_showLable else None
             if len(label) != len(targets[i]):
                 Tn_1 += 1
                 # print(f"{lp_class[i]}")
@@ -104,9 +105,20 @@ class eval_Net:
             prebs = Net(images)
             preb_labels = self.greedy_decode(prebs)
             Tp, Tn_1, Tn_2 = self.check_lables(
-                preb_labels, targets, lp_class, Tp, Tn_1, Tn_2
+                preb_labels, targets, lp_class, Tp, Tn_1, Tn_2,require_showLable=args.require_showLable
             )
-
+            pass
+        self.Acc =Tp * 1.0 / (Tp + Tn_1 + Tn_2)
+        self.Tp, self.Tn_1, self.Tn_2 = Tp, Tn_1, Tn_2
+        return self.Acc, Tp, Tn_1, Tn_2
+    
+    def show_lables(self,label, target):
+        lable_str = "".join(CHARS[i] for i in label)
+        target_str = "".join(CHARS[int(j)] for j in target.tolist())
+        perfectPredict=True if lable_str==target_str else False
+        print(f"lable={lable_str}\ttarget={target_str}\t{perfectPredict}")
+        return
+    
     def print_result(self):
         Tn1_clc_np, Tn2_clc_np = np.array(self.Tn1_lp_clc), np.array(self.Tn2_lp_clc)
         values, counts = np.unique(Tn1_clc_np, return_counts=True)
@@ -115,14 +127,15 @@ class eval_Net:
         values, counts = np.unique(Tn2_clc_np, return_counts=True)
         err2_freq = dict(zip(LP_CLASS, counts / self.lp_clc_freq[values]))
         # print(f'char err:{err2_freq}')
-        df = pd.DataFrame(
+        LP_errChart = pd.DataFrame(
             {
                 "车牌类型": LP_CLASS,
                 "len err": [err1_freq.get(cls, np.nan) for cls in LP_CLASS],
                 "char err": [err2_freq.get(cls, np.nan) for cls in LP_CLASS],
             }
         )
-        print(df)
+        print(LP_errChart)
+        print(f"[Info] Test Accuracy: {self.Acc:.3f} [{self.Tp}:{self.Tn_1}:{self.Tn_2}:{(self.Tp+self.Tn_1+self.Tn_2)}]")
         return
 
     pass
