@@ -116,7 +116,7 @@ class eval_Net:
         lable_str = "".join(CHARS[i] for i in label)
         target_str = "".join(CHARS[int(j)] for j in target.tolist())
         perfectPredict=True if lable_str==target_str else False
-        print(f"lable={lable_str}\ttarget={target_str}\t{perfectPredict}")
+        print(f"lable={lable_str}\ttarget={target_str}\t{perfectPredict}") if not perfectPredict else None
         return
     
     def print_result(self):

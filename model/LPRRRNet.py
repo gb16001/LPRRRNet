@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-
 class small_basic_block(nn.Module):
     def __init__(self, ch_in, ch_out):
         super(small_basic_block, self).__init__()
@@ -18,6 +17,212 @@ class small_basic_block(nn.Module):
         )
     def forward(self, x):
         return self.block(x)
+
+class Shuffle_Mobile_Block(nn.Module): # img transfer
+    def __init__(self, channels, groups) -> None:
+        super().__init__()
+        self.block=nn.Sequential(
+            nn.Conv2d(channels,channels,3,1,1,groups=groups),
+            nn.BatchNorm2d(channels),
+            nn.ReLU(),
+            ChannelShuffle(groups),
+            # nn.Conv2d(channels,channels,3,1,1),
+            nn.Conv2d(channels,channels,3,1,1,groups=groups),
+            nn.BatchNorm2d(channels),
+            nn.ReLU(),
+        )
+        return
+
+    def forward(self, x: torch.Tensor):
+        out = x + self.block(x)
+        return out
+
+class ChannelShuffle(nn.Module):
+    def __init__(self, groups):
+        super(ChannelShuffle, self).__init__()
+        self.groups = groups
+
+    def forward(self, x):
+        batchsize, num_channels, height, width = x.size()
+        channels_per_group = num_channels // self.groups
+        # Reshape
+        x = x.view(batchsize, self.groups, channels_per_group, height, width)
+        # Transpose
+        x = x.transpose(1, 2).contiguous()
+        # Flatten
+        x = x.view(batchsize, -1, height, width)
+        return x
+
+
+class Backbone:
+    def LPRnet(dropout_rate=0.5,class_num=74):
+        return nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1), # 0
+            nn.BatchNorm2d(num_features=64),
+            nn.ReLU(),  # 2
+            nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1, 1, 1)),
+            small_basic_block(ch_in=64, ch_out=128),    # *** 4 ***
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),  # 6
+            nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(2, 1, 2)),
+            small_basic_block(ch_in=64, ch_out=256),   # 8
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),  # 10
+            small_basic_block(ch_in=256, ch_out=256),   # *** 11 ***
+            nn.BatchNorm2d(num_features=256),   # 12
+            nn.ReLU(),
+            nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(4, 1, 2)),  # 14
+            nn.Dropout(dropout_rate),
+            nn.Conv2d(in_channels=64, out_channels=256, kernel_size=(1, 4), stride=1),  # 16
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),  # 18
+            nn.Dropout(dropout_rate),
+            nn.Conv2d(in_channels=256, out_channels=class_num, kernel_size=(13, 1), stride=1), # 20
+            nn.BatchNorm2d(num_features=class_num),
+            nn.ReLU(),  # *** 22 ***
+        )
+    def grouped(class_num=74):
+        return nn.Sequential(
+            nn.Conv2d(3,9,3,1),
+            nn.BatchNorm2d(num_features=9),
+            nn.ReLU(),
+            nn.Conv2d(9,27,3,2),
+            nn.BatchNorm2d(num_features=27),
+            nn.ReLU(),
+            nn.Conv2d(27,81,3,2),
+            nn.BatchNorm2d(num_features=81),
+            nn.ReLU(),
+            # nn.MaxPool2d((3,1),stride=1),
+            nn.Conv2d(81,81,(3,3),1,groups=9),
+            nn.BatchNorm2d(num_features=81),
+            nn.Conv2d(81,81,1,1),
+            nn.BatchNorm2d(num_features=81),
+            nn.ReLU(),
+            nn.Conv2d(81,class_num,(1,3),1),
+            nn.BatchNorm2d(num_features=class_num),
+            nn.ReLU(),
+        )
+    def O_fix(class_num=74):
+        return nn.Sequential(
+            nn.Conv2d(3,9,3,1),
+            nn.BatchNorm2d(num_features=9),
+            nn.ReLU(),
+            Shuffle_Mobile_Block(9,3),
+            nn.Conv2d(9,27,3,1),
+            nn.BatchNorm2d(num_features=27),
+            nn.ReLU(),
+            nn.MaxPool2d(3,2,1),
+            Shuffle_Mobile_Block(27,9),
+            nn.Conv2d(27,81,3,1),
+            nn.BatchNorm2d(num_features=81),
+            nn.ReLU(),
+            nn.MaxPool2d(3,2,1),
+            # nn.MaxPool2d((3,1),stride=1),
+            nn.Conv2d(81,81,(3,3),1,groups=9),
+            nn.BatchNorm2d(num_features=81),
+            nn.Conv2d(81,81,1,1),
+            nn.BatchNorm2d(num_features=81),
+            nn.ReLU(),
+            Shuffle_Mobile_Block(81,9),
+            nn.Conv2d(81,class_num,(1,5),1,(0,1)),# expand kernel feild, to fix O recognition
+            nn.BatchNorm2d(num_features=class_num),
+            nn.ReLU(),
+        )
+    def M_S(class_num=74):
+        return nn.Sequential(
+            nn.Conv2d(3,9,3,1),
+            nn.BatchNorm2d(num_features=9),
+            nn.ReLU(),
+            Shuffle_Mobile_Block(9,3),
+            nn.Conv2d(9,27,3,2),
+            nn.BatchNorm2d(num_features=27),
+            nn.ReLU(),
+            Shuffle_Mobile_Block(27,9),
+            nn.Conv2d(27,81,3,2),
+            nn.BatchNorm2d(num_features=81),
+            nn.ReLU(),
+            # nn.MaxPool2d((3,1),stride=1),
+            nn.Conv2d(81,81,(3,3),1,groups=9),
+            nn.BatchNorm2d(num_features=81),
+            nn.Conv2d(81,81,1,1),
+            nn.BatchNorm2d(num_features=81),
+            nn.ReLU(),
+            Shuffle_Mobile_Block(81,9),
+            nn.Conv2d(81,class_num,(1,3),1),
+            nn.BatchNorm2d(num_features=class_num),
+            nn.ReLU(),
+        )
+    pass
+class Neck:
+    def flate():
+        return nn.Flatten(2,3)
+    def lprnet():
+        # use class LPRNet derectly
+        return
+    pass
+class Head:
+    def lprnet():
+        # use class LPRNet derectly
+        return
+    class resRNN(nn.Module):
+        def __init__(self, class_num:int=74) -> None:
+            super().__init__()
+            self.spatialDense = nn.Sequential(
+            nn.Linear(36, 18),
+            nn.BatchNorm1d(num_features=class_num),
+            nn.ReLU(),
+            )
+            self.rnn_encoder=nn.GRU(class_num,class_num,bidirectional=True)
+            self.rnn_decoder=nn.GRU(class_num,class_num,bidirectional=True)
+            self.channelDense=nn.Linear(class_num*2,class_num,)
+            self.normL2=nn.BatchNorm1d(class_num)
+            return
+        def forward(self,logits_2s:torch.Tensor):# inshape(bz,class,36)
+            logits_1s=self.spatialDense(logits_2s)
+            logits_2t=logits_2s.permute(2,0,1).contiguous()# (N,B,C)
+            logits_1t=logits_1s.permute(2,0,1).contiguous()
+            _,hidden_0=self.rnn_encoder(logits_2t)
+
+            y_hat,_=self.rnn_decoder(logits_1t,hidden_0)
+
+            y_hat=y_hat.permute(1,0,2)
+            y_hat=self.channelDense(y_hat)
+            y_hat=y_hat.permute(0,2,1)
+            y_hat=self.normL2(y_hat)
+            y_hat=F.relu(y_hat)
+            return y_hat+logits_1s #softmax to property
+    class attnRNN(nn.Module):
+        # TODO: realize attn, key is sequance infer. rnn decoder's performance is differ in train and evalu, we can reference d2l rnn train script.
+        def __init__(self, class_num: int) -> None:
+            super().__init__()
+            self.rnn_encoder = nn.GRU(class_num, class_num, bidirectional=True)
+            self.rnn_decoder = nn.GRU(class_num, class_num, bidirectional=True)
+            self.channelDense = nn.Sequential(
+                nn.Linear(class_num * 2, class_num),
+                nn.BatchNorm1d(class_num),
+                nn.ReLU(),
+            )
+            return
+
+        def get_H0(self, logits_2s: torch.Tensor):
+            r"""logits_2s:(bz,class,36)"""
+            logits_2t = logits_2s.permute(2, 0, 1).contiguous()  # (N,B,C)
+            _, hidden_0 = self.rnn_encoder(logits_2t)
+            return hidden_0
+
+        def forward(self, Q_t, hidden_0):
+            r"""Q_t:(N,B,C)"""
+            y_hat, _ = self.rnn_decoder(Q_t, hidden_0)
+            y_hat = self.channelDense(y_hat)
+            return y_hat
+
+    class classifyer(nn.Module):# TODO CONV to 1 size, lpr class channel
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            return
+        def forward(self):
+            return
+    pass
 
 
 class LPRNet(nn.Module):
@@ -286,45 +491,9 @@ class LPRRRNet(nn.Module):
         y_hat=F.relu(y_hat)
         return y_hat+logits_1s #softmax to property
 
-def __test():
-    net=LPRRRNet(class_num=74)
-    x=torch.randn(64,3,24,94)
-    y_hat=net(x)
-    print(y_hat.size())
-    return
 
 
-class Shuffle_Mobile_Block(nn.Module): # img transfer
-    def __init__(self, channels, groups) -> None:
-        super().__init__()
-        self.block=nn.Sequential(
-            nn.Conv2d(channels,channels,3,1,1,groups=groups),
-            ChannelShuffle(groups),
-            nn.Conv2d(channels,channels,3,1,1),
-            nn.Conv2d(channels,channels,1,1),
-            nn.BatchNorm2d(channels),
-            nn.ReLU(),
-        )
-        return
 
-    def forward(self, x: torch.Tensor):
-        out = x + self.block(x)
-        return out
-class ChannelShuffle(nn.Module):
-    def __init__(self, groups):
-        super(ChannelShuffle, self).__init__()
-        self.groups = groups
-
-    def forward(self, x):
-        batchsize, num_channels, height, width = x.size()
-        channels_per_group = num_channels // self.groups
-        # Reshape
-        x = x.view(batchsize, self.groups, channels_per_group, height, width)
-        # Transpose
-        x = x.transpose(1, 2).contiguous()
-        # Flatten
-        x = x.view(batchsize, -1, height, width)
-        return x
 def __test_block():
     block=Shuffle_Mobile_Block(27,9)
     x=torch.randn(2,27,24,94)
@@ -339,9 +508,6 @@ def __compair_shuffle():
     compare=torch.equal(torch_m(x),my_m(x))
     print(f"nn.ChannelShuffle==ChannelShuffle: {compare}")
     return compare
-
-
-
 
 
 def norm_init_weights(m):# normalize init weight
@@ -370,7 +536,23 @@ def init_net_weight(lprnet:nn.Module,args):
             m.apply(norm_init_weights)        
         print("initial net weights successful!")
     return 
-
+class myNet(nn.Module):
+    def __init__(self,class_num:int) -> None:
+        super().__init__()
+        back=Backbone.O_fix(class_num)
+        neck=Neck.flate()
+        head=Head.resRNN(class_num)
+        self.net=nn.Sequential(back,neck,head)
+        return
+    def forward(self,x:torch.Tensor):
+        return self.net(x)
+def __test():
+    net=myNet(74)
+    # net=LPRRRNet(class_num=74)
+    x=torch.randn(8,3,24,94)
+    y_hat=net(x)
+    print(y_hat.size())
+    return
 if __name__=="__main__":
     # net= LPRNet(lpr_max_len=18, phase=False, class_num=74, dropout_rate=0.5)
     __test()

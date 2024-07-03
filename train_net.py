@@ -11,7 +11,7 @@ from data import  CHARS_DICT, LPRDataLoader,CBLDataLoader,CBLdata2iter
 from data.CBLchars import CHARS ,LP_CLASS
 
 from model.LPRNet import build_lprnet
-from model import LPRRRNet,T_LENGTH,init_net_weight
+from model import LPRRRNet,T_LENGTH,init_net_weight,myNet
 # import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 import torch.nn.functional as F
@@ -32,7 +32,7 @@ def creat_net(args):
     lprnet = build_lprnet(lpr_max_len=args.lpr_max_len, class_num=len(CHARS), dropout_rate=args.dropout_rate)
     device = torch.device("cuda:0" if args.cuda else "cpu")
     lprnet.to(device)
-    mynet=LPRRRNet(len(CHARS))
+    mynet=myNet(len(CHARS))
     print("Successful to build network!")
     return  mynet
 

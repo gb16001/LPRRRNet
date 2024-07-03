@@ -1,7 +1,7 @@
 cuda: True
 num_workers: 8
 test_batch_size: 256
-pretrained_model: weights/lprrrnet-shuff_mob_gru-10e-.951acc.pth
+pretrained_model: weights/O_fix-10e-.981acc.pth
 require_showLable: True
 
 img_size: [94, 24]
