@@ -1,17 +1,10 @@
 # -*- coding: utf-8 -*-
-''' latest train cmd
-    python train_LPRNet.py --train_img_dirs   data/test  --test_img_dirs   data/test --pretrained_model weights/origin_Final_LPRNet_model.pth --train_batch_size 256 --learning_rate 0.001 --test_interval 500 --max_epoch 
-    train this
-    python train_net.py --train_batch_size 256 --learning_rate 0.001 --test_interval 500 --max_epoch 5
-
-    --pretrained_model weights/CBL-acc.822.pth --learning_rate 0.0001
-'''
 
 from data import  CHARS_DICT, LPRDataLoader,CBLDataLoader,CBLdata2iter
 from data.CBLchars import CHARS ,LP_CLASS
 
 from model.LPRNet import build_lprnet
-from model import LPRRRNet,T_LENGTH,init_net_weight,myNet
+from model import LPRRRNet,T_LENGTH,init_net_weight,myNet,O_fix
 # import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 import torch.nn.functional as F
@@ -32,7 +25,7 @@ def creat_net(args):
     lprnet = build_lprnet(lpr_max_len=args.lpr_max_len, class_num=len(CHARS), dropout_rate=args.dropout_rate)
     device = torch.device("cuda:0" if args.cuda else "cpu")
     lprnet.to(device)
-    mynet=myNet(len(CHARS))
+    mynet=O_fix(len(CHARS))
     print("Successful to build network!")
     return  mynet
 
@@ -40,24 +33,27 @@ def creat_net(args):
 def creat_optim(lprnet,args):
     # optimizer = optim.SGD(lprnet.parameters(), lr=args.learning_rate,
     # momentum=args.momentum, weight_decay=args.weight_decay)
-    optimizer = optim.RMSprop(
-        lprnet.parameters(),
-        lr=args.learning_rate,
-        alpha=0.9,
-        eps=1e-08,
-        momentum=args.momentum,
-        weight_decay=args.weight_decay,
+    optimizer = (
+        optim.RMSprop(
+            lprnet.parameters(),
+            lr=args.learning_rate,
+            alpha=0.9,
+            eps=1e-08,
+            momentum=args.momentum,
+            weight_decay=args.weight_decay,
+        )
+        if args.optim == "RMS"
+        else optim.Adam(
+            lprnet.parameters(),
+            lr=args.learning_rate,
+            betas=(0.8, 0.9),
+            weight_decay=args.weight_decay,
+        )
     )
-    optim.Adam(
-        lprnet.parameters(),
-        lr=args.learning_rate,
-        betas=(0.8, 0.9),
-        weight_decay=args.weight_decay,
-    )
-    
 
     ctc_loss = nn.CTCLoss(blank=len(CHARS)-1, reduction='mean') # reduction: 'none' | 'mean' | 'sum'
-    return optimizer,ctc_loss
+    CE_loss=nn.CrossEntropyLoss() if args.lpr_class_predict else None
+    return optimizer,ctc_loss,CE_loss
 
 def creat_dataset(args):
     train_dataset = CBLDataLoader(args.CBLtrain, args.img_size, args.lpr_max_len)
@@ -120,7 +116,7 @@ def train(conf_file:str):
     lprnet=creat_net(args)
     init_net_weight(lprnet,args)
     # define optimizer, loss
-    optimizer,ctc_loss=creat_optim(lprnet,args)
+    optimizer,ctc_loss,CE_loss=creat_optim(lprnet,args)
 
     # ready to train
     if not os.path.exists(args.save_folder):
@@ -147,22 +143,26 @@ def train(conf_file:str):
             Tboard_writer.add_scalar('train/valAcc', val_acc, epoch_num*epoch_size)
             for name,param in lprnet.named_parameters():
                 Tboard_writer.add_histogram(name,param.clone().cpu().data.numpy(),epoch_num)
-        for i,(images, labels, lengths, lp_class)in enumerate(train_iter):
+        for i,(images, labels, lengths, lp_classes)in enumerate(train_iter):
             start_time = time.time()
             images=images.to(device)
             labels=labels.to(device)
+            lp_classes=torch.tensor(lp_classes,device=device)
             # get ctc parameters
             input_lengths, target_lengths = sparse_tuple_for_ctc(T_LENGTH, lengths)
             # update lr
             lr = adjust_learning_rate(optimizer, epoch_num, args.learning_rate, args.lr_schedule)
             # forward
-            logits = lprnet(images)
+            if args.lpr_class_predict:
+                logits,lp_class_hat=lprnet(images)
+            else:
+                logits = lprnet(images)
             log_probs = logits.permute(2, 0, 1) # for ctc loss: T x N x C
             # print(labels.shape)
             log_probs = log_probs.log_softmax(2).requires_grad_()
             # backprop
             optimizer.zero_grad()
-            loss = ctc_loss(log_probs, labels, input_lengths=input_lengths, target_lengths=target_lengths)
+            loss = ctc_loss(log_probs, labels, input_lengths=input_lengths, target_lengths=target_lengths)+0.2*CE_loss(lp_class_hat, lp_classes) if args.lpr_class_predict else ctc_loss(log_probs, labels, input_lengths=input_lengths, target_lengths=target_lengths)
             if loss.item() == np.inf:
                 continue
             loss.backward()
@@ -242,7 +242,10 @@ def Greedy_Decode_Eval(Net, testIter, args):
         images=images.to(device)
         targets =unpack_lables(labels,lengths)
         # forward
-        prebs = Net(images)
+        if args.lpr_class_predict:
+            prebs,lpClass_hat = Net(images)
+        else:
+            prebs = Net(images)
         preb_labels=greedy_decode(prebs)
         Tp,Tn_1,Tn_2=check_lables(preb_labels,targets,lp_class,Tp,Tn_1,Tn_2)
 

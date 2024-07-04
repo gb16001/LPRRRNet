@@ -1,5 +1,5 @@
 # TODO CBL chars is diff with old dataset
-
+import torch
 from torch.utils.data import *
 from torchvision import transforms
 from PIL import Image

@@ -19,10 +19,12 @@ epoch_p_test: 1
 train_batch_size: 256
 test_batch_size: 256
 learning_rate: 0.001
-lr_schedule: [8, 11, 12, 14, 16] # for adam
-# lr_schedule: [4, 8, 12, 14, 16] # for RMS
+# lr_schedule: [8, 11, 12, 14, 16] # for adam
+lr_schedule: [4, 8, 12, 14, 16] # for RMS
 momentum: 0.9
 weight_decay: 2e-5
+optim: RMS # adam
 # model
 dropout_rate: 0.5
 lpr_max_len: 8 #license plate number max length.
+lpr_class_predict: False
