@@ -37,7 +37,6 @@ def creat_net(args):
     return  mynet
 
 
-
 def creat_optim(lprnet,args):
     # optimizer = optim.SGD(lprnet.parameters(), lr=args.learning_rate,
     # momentum=args.momentum, weight_decay=args.weight_decay)
@@ -49,6 +48,14 @@ def creat_optim(lprnet,args):
         momentum=args.momentum,
         weight_decay=args.weight_decay,
     )
+    optim.Adam(
+        lprnet.parameters(),
+        lr=args.learning_rate,
+        betas=(0.8, 0.9),
+        weight_decay=args.weight_decay,
+    )
+    
+
     ctc_loss = nn.CTCLoss(blank=len(CHARS)-1, reduction='mean') # reduction: 'none' | 'mean' | 'sum'
     return optimizer,ctc_loss
 
@@ -90,7 +97,6 @@ def get_parser():
     args = parser.parse_args()
 
     return args
-
 
 
 def train(conf_file:str):
@@ -225,7 +231,7 @@ def check_lables(preb_labels,targets,lp_class,*Tn):
             Tn_2 += 1
             # print(f"{label}|{targets[i]}")
     return Tp, Tn_1, Tn_2
-    
+
 
 def Greedy_Decode_Eval(Net, testIter, args):
     Net.eval()
