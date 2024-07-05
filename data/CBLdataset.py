@@ -122,6 +122,70 @@ def CBLdata2iter(
         dataset, batch_size, shuffle, num_workers=num_workers, collate_fn=collate_fn
     )
 
+def transform_labels(labels, lengths, padding_value=73, max_length=8):
+    """
+    Transforms the CTC-style labels into a 2D array for CRE loss.
+    
+    Args:
+        labels (torch.Tensor): The flattened tensor of all labels.
+        lengths (list): List of lengths for each sequence.
+        padding_value (int): The value to pad shorter sequences with.
+        max_length (int): The uniform length of each sequence.
+    
+    Returns:
+        torch.Tensor: A 2D tensor of shape (max_length, B) with padded sequences.
+    """
+    # Convert labels tensor to numpy array
+    labels_np = labels.numpy()
+    
+    # Number of sequences
+    B = len(lengths)
+    
+    # Initialize the 2D label array with the padding value
+    label_array = np.full((max_length,B ), padding_value, dtype=int)
+    
+    # Pointer for the start index in the flattened label list
+    start_idx = 0
+    
+    for i, length in enumerate(lengths):
+        # Calculate the end index for the current sequence
+        end_idx = start_idx + length
+        
+        # Copy the original labels to the 2D array
+        label_array[ :length,i] = labels_np[start_idx:end_idx]
+        
+        # Update the start index for the next sequence
+        start_idx = end_idx
+    
+    # Convert the 2D label array back to tensor
+    label_tensor = torch.tensor(label_array)
+    
+    return label_tensor
+
+def prepare_rnn_input_output(x, start_token=74, end_token=74):
+    """
+    Prepares the input (X) and output (Y) for RNN training.
+    
+    Args:
+        x (torch.Tensor): The tensor of shape (N, BZ) containing the transformed labels.
+        start_token (int): The token to prepend to the input sequences.
+        end_token (int): The token to append to the output sequences.
+    
+    Returns:
+        torch.Tensor: The input tensor X of shape (N + 1, BZ).
+        torch.Tensor: The output tensor Y of shape (N + 1, BZ).
+    """
+    N, BZ = x.shape
+    
+    # Create X by adding start_token at the beginning of each sequence
+    start_tokens = torch.full((1, BZ), start_token, dtype=int)
+    X = torch.cat((start_tokens, x), dim=0)
+    
+    # Create Y by adding end_token at the end of each sequence
+    end_tokens = torch.full((1, BZ), end_token, dtype=int)
+    Y = torch.cat((x, end_tokens), dim=0)
+    
+    return X, Y
 
 def test_module():
     dataset = CBLDataLoader("data/CBLPRD-330k_v1/val.txt", [94, 24], 8)

@@ -253,9 +253,9 @@ class Head:
         def forward(self, Q_t:torch.Tensor, hidden_0):
             r"""Q_t:int(N,B)"""
             x=F.one_hot(Q_t.long(),self.classNum_char).to(torch.float32)
-            y_hat, _ = self.rnn_decoder(x, hidden_0)
+            y_hat, hidden = self.rnn_decoder(x, hidden_0)
             y_hat = self.channelDense(y_hat)
-            return y_hat
+            return y_hat, hidden
 
     def classifier(LPR_classNum:int=7):
         '''x:(bz,81,2,20)'''
@@ -613,6 +613,30 @@ class Classify(nn.Module):
         x=self.head(x)
         return x,lprClass
 
+class attn_predictNet(nn.Module):
+    def __init__(self,class_num:int) -> None:
+        super().__init__()
+        self.back=Backbone.O_fix(class_num)
+        self.neck=Neck.flate()
+        self.head=Head.attnRNN(class_num)
+        # self.net=nn.Sequential(back,neck,head)
+        return
+    def forward(self,x:torch.Tensor):
+        """return H_0 for RNN decoder"""
+        x=self.back(x)
+        x=self.neck(x)
+        hidden_0=self.head.get_H0(x)
+        return hidden_0
+    def forward_dec(self,x:torch.Tensor,h_0):
+        '''x:int(N,B)'''
+        y_hat,hidden=self.head(x,h_0)
+        return y_hat.permute(0,2,1),hidden #(N,C,BZ)
+    def forward_train(self,img:torch.Tensor,x:torch.Tensor):
+        r'''img:(bz,ch,y,x) x:int(N,B)'''
+        H_0=self(img)
+        y_hat,_=self.forward_dec(x,H_0)
+        return y_hat# (N,C,BZ)
+    pass
 class myNet(nn.Module):
     def __init__(self,class_num:int) -> None:
         super().__init__()
@@ -622,10 +646,20 @@ class myNet(nn.Module):
         # self.net=nn.Sequential(back,neck,head)
         return
     def forward(self,x:torch.Tensor):
+        """return H_0 for RNN decoder"""
         x=self.back(x)
         x=self.neck(x)
         hidden_0=self.head.get_H0(x)
         return hidden_0
+    def forward_dec(self,x:torch.Tensor,h_0):
+        '''x:int(N,B)'''
+        y_hat,hidden=self.head(x,h_0)
+        return y_hat.permute(0,2,1),hidden #(N,C,BZ)
+    def forward_train(self,img:torch.Tensor,x:torch.Tensor):
+        r'''img:(bz,ch,y,x) x:int(N,B)'''
+        H_0=self(img)
+        y_hat,_=self.forward_dec(x,H_0)
+        return y_hat# (N,C,BZ)
     pass
 
 def __test():

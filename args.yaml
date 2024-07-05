@@ -12,8 +12,8 @@ tb_log_dir: null  # 'runs/May29_10-53-54_willing-MS-7A38' null
 # train opt.
 # max_epoch: 5
 init_epoch: 0
-add_epochs: 10
-epoch_p_save: 3
+add_epochs: 5
+epoch_p_save: 1
 epoch_p_test: 1
 # learn paramaters
 train_batch_size: 256
@@ -28,3 +28,4 @@ optim: RMS # adam
 dropout_rate: 0.5
 lpr_max_len: 8 #license plate number max length.
 lpr_class_predict: False
+lpr_CTC_predict: False
