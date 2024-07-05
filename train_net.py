@@ -277,6 +277,34 @@ def check_lables(preb_labels,targets,lp_class,*Tn):
             # print(f"{label}|{targets[i]}")
     return Tp, Tn_1, Tn_2
 
+def infer_attn(Net:attn_predictNet,imgs:torch.Tensor,args):# TODO untested func
+    Net.eval()
+    device = torch.device("cuda:0" if args.cuda else "cpu")
+    imgs = imgs.to(device)
+    batchSize = imgs.size(0)
+    
+    x_char = torch.full((1, batchSize), len(CHARS)-1, dtype=torch.int64).to(device)
+    h_0 = Net.forward(imgs)
+    
+    generated_sequence = []
+    
+    for i in range(9):
+        y_hat_char, h_0 = Net.forward_dec(x_char, h_0)
+        x_char = torch.argmax(y_hat_char, dim=1, keepdim=True)
+        generated_sequence.append(x_char)
+    
+    generated_sequence = torch.cat(generated_sequence, dim=0).cpu().numpy()
+    
+    # Transpose to shape (batchsize, seq_len)
+    generated_sequence = generated_sequence.T
+    
+    # Convert indices to characters
+    result_strings = []
+    for seq in generated_sequence:
+        result_strings.append(''.join([CHARS[idx] for idx in seq]))
+    
+    return result_strings
+
 def Greedy_eval_attn(Net:attn_predictNet,testIter,args):
     Net.eval()
     device = torch.device("cuda:0" if args.cuda else "cpu")

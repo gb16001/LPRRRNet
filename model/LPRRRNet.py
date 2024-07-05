@@ -231,14 +231,13 @@ class Head:
             return y_hat+logits_1s #softmax to property
 
     class attnRNN(nn.Module):
-        # TODO: realize attn, key is sequance infer. rnn decoder's performance is differ in train and evalu, we can reference d2l rnn train script.
         def __init__(self, char_classNum: int) -> None:
             super().__init__()
             self.classNum_char=char_classNum
             self.rnn_encoder = nn.GRU(char_classNum, char_classNum, bidirectional=True)
-            self.rnn_decoder = nn.GRU(char_classNum, char_classNum, bidirectional=True)
+            self.rnn_decoder = nn.GRU(char_classNum, char_classNum,2)
             self.channelDense = nn.Sequential(
-                nn.Linear(char_classNum * 2, char_classNum),
+                nn.Linear(char_classNum , char_classNum),
                 nn.LayerNorm(char_classNum),
                 nn.ReLU(),
             )
