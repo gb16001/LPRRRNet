@@ -194,6 +194,14 @@ class Head:
     def lprnet():
         # use class LPRNet derectly
         return
+
+    def spatialDense(char_classNum:int=74):
+        return nn.Sequential(
+            nn.Linear(36, 18),
+            nn.BatchNorm1d(num_features=char_classNum),
+            nn.ReLU(),
+        )
+
     class resRNN(nn.Module):
         def __init__(self, char_classNum:int=74) -> None:
             super().__init__()
@@ -221,15 +229,17 @@ class Head:
             y_hat=self.normL2(y_hat)
             y_hat=F.relu(y_hat)
             return y_hat+logits_1s #softmax to property
+
     class attnRNN(nn.Module):
         # TODO: realize attn, key is sequance infer. rnn decoder's performance is differ in train and evalu, we can reference d2l rnn train script.
         def __init__(self, char_classNum: int) -> None:
             super().__init__()
+            self.classNum_char=char_classNum
             self.rnn_encoder = nn.GRU(char_classNum, char_classNum, bidirectional=True)
             self.rnn_decoder = nn.GRU(char_classNum, char_classNum, bidirectional=True)
             self.channelDense = nn.Sequential(
                 nn.Linear(char_classNum * 2, char_classNum),
-                nn.BatchNorm1d(char_classNum),
+                nn.LayerNorm(char_classNum),
                 nn.ReLU(),
             )
             return
@@ -240,11 +250,13 @@ class Head:
             _, hidden_0 = self.rnn_encoder(logits_2t)
             return hidden_0
 
-        def forward(self, Q_t, hidden_0):
-            r"""Q_t:(N,B,C)"""
-            y_hat, _ = self.rnn_decoder(Q_t, hidden_0)
+        def forward(self, Q_t:torch.Tensor, hidden_0):
+            r"""Q_t:int(N,B)"""
+            x=F.one_hot(Q_t.long(),self.classNum_char).to(torch.float32)
+            y_hat, _ = self.rnn_decoder(x, hidden_0)
             y_hat = self.channelDense(y_hat)
             return y_hat
+
     def classifier(LPR_classNum:int=7):
         '''x:(bz,81,2,20)'''
         return nn.Sequential(
@@ -259,26 +271,7 @@ class Head:
                 nn.AvgPool2d((1,5)),
                 nn.Flatten()
             )
-    class CLASSIFYER(nn.Module):# TODO CONV to 1 size, lpr class channel
-        def __init__(self, LPR_classNum:int=7) -> None:
-            super().__init__()
-            self.T=nn.Sequential(
-                nn.Conv2d(81,27,2,2,groups=9),
-                nn.BatchNorm2d(27),
-                nn.ReLU(),
-                nn.Conv2d(27,9,(1,2),(1,2),groups=9),
-                nn.BatchNorm2d(9),
-                nn.ReLU(),
-                nn.Conv2d(9,7,1),
-                nn.ReLU(),
-                nn.AvgPool2d((1,5)),
-                nn.Flatten()
-            )
-            return
-        def forward(self,x:torch.Tensor):
-            '''x:(bz,81,2,20)'''
 
-            return
     pass
 
 
@@ -601,7 +594,7 @@ class O_fix(nn.Module):
         return
     def forward(self,x:torch.Tensor):
         return self.net(x)
-    
+
 class Classify(nn.Module):
     def __init__(self,char_classNum:int) -> None:
         super().__init__()
@@ -619,32 +612,68 @@ class Classify(nn.Module):
         x=self.neck(x)
         x=self.head(x)
         return x,lprClass
-class myNet():
+
+class myNet(nn.Module):
     def __init__(self,class_num:int) -> None:
         super().__init__()
-        back=Backbone.O_fix(class_num)
-        neck=Neck.flate()
-        head=Head.resRNN(class_num)
-        self.net=nn.Sequential(back,neck,head)
+        self.back=Backbone.O_fix(class_num)
+        self.neck=Neck.flate()
+        self.head=Head.attnRNN(class_num)
+        # self.net=nn.Sequential(back,neck,head)
         return
     def forward(self,x:torch.Tensor):
-        return self.net(x)
+        x=self.back(x)
+        x=self.neck(x)
+        hidden_0=self.head.get_H0(x)
+        return hidden_0
     pass
+
 def __test():
-    net=myNet(74)
+    classNum_char=74
+    batchSize=4
+    maxLength=8
+    net=myNet(classNum_char)
     # net=LPRRRNet(char_classNum=74)
-    x=torch.randn(8,3,24,94)
-    y_hat,class_hat=net(x)
-    print(y_hat.size(),class_hat.size())
+    img=torch.randn(batchSize,3,24,94)
+    def gen_seq():
+        # 生成随机序列
+        X = torch.randint(0, classNum_char, (maxLength, batchSize))
+        Y = torch.randint(0, classNum_char, (maxLength, batchSize))
+        # 确保X的第一个元素是73
+        X[0, :] = 73
+        # 确保Y的最后一个元素是73
+        Y[-1, :] = 73
+        # 确保X的后面的元素与Y的前面的元素相同
+        X[1:, :] = Y[:-1, :]
+        return X,Y
+    X,Y=gen_seq()
+        
+    # for i in range(batchSize):
+    #     X[1:, i] = Y[:-1, i]
 
-    labels=torch.randint(0, 7, (8,))
-    # 定义交叉熵损失函数
+    print("X:", X)
+    print("Y:", Y)
+    # forward
+    H_0=net(img)
+    y_hat:torch.Tensor=net.head(X,H_0)
+    y_hat=y_hat.permute(0,2,1)
     criterion = nn.CrossEntropyLoss()
-
-    # 计算损失
-    loss = criterion(class_hat, labels)
-    print("Loss:", loss.item())
+    loss=criterion(y_hat, Y)
     loss.backward()
+    print(loss)
+    # try:
+    #     y_hat,class_hat=net(img)
+    # except ValueError:
+    #     y_hat,class_hat=net(img),None
+    # print(y_hat.size(),class_hat.size() if class_hat is not None else None)
+    # if class_hat is not None:
+    #     labels=torch.randint(0, 7, (8,))
+    #     # 定义交叉熵损失函数
+    #     criterion = nn.CrossEntropyLoss()
+    #     # 计算损失
+    #     loss = criterion(class_hat, labels)
+    #     print("Loss:", loss.item())
+    #     loss.backward()
     return
 if __name__=="__main__":
     # net= LPRNet(lpr_max_len=18, phase=False, char_classNum=74, dropout_rate=0.5)
