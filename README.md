@@ -9,9 +9,9 @@ Licence Plate Recognition with Residual Recurrent Neural Network
 ### dataset prepare
 download [CBLPRD-330k dataset](https://github.com/SunlifeV/CBLPRD-330k?tab=readme-ov-file), and put it in `data/CBLPRD-330k_v1`folder
 ### train
-run `train_net.py` script, the config file of this script is `args.yaml`.
-please make sure the CBLtrain and CBLval keys point to the right path
-by reconfig model_name key, you can try other models built in `model/LPRRRNet.py`
+run `train_net.py` script, the config file of this script is `args.yaml`.  
+please make sure the CBLtrain and CBLval keys point to the right path  
+by reconfig model_name key, you can try other models built in `model/LPRRRNet.py`  
 **caution**: `lpr_class_predict: false lpr_CTC_predict: True`should set to the right value accroding to the model.
 ### evaluate
 run `eval_net.py` script with config file `args_eval.yaml`.
