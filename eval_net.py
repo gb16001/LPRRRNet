@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import time
 from dynaconf import Dynaconf
-from train_net import creat_dataset, creat_net, init_net_weight
+from train_net import creat_dataset, creat_net, init_net_weight,infer_attn
 import pandas as pd
 
 def evaluate(conf_file: str):
@@ -27,6 +27,7 @@ def evaluate(conf_file: str):
     assert args.pretrained_model != ""
     init_net_weight(net, args)
     evalor = eval_Net(lp_clc_freq)
+    
     evalor.Greedy_Decode_Eval(net, test_iter, args)
     # err analyze
     evalor.print_result()
@@ -100,9 +101,12 @@ class eval_Net:
         t1 = time.time()
         for i, (images, labels, lengths, lp_class) in enumerate(testIter):
             images = images.to(device)
+            if not args.lpr_CTC_predict:# attn infer test
+                plate_numbers= infer_attn(Net,images,args)
+                print(plate_numbers)
             targets = self.unpack_lables(labels, lengths)
             # forward
-            prebs = Net(images)
+            prebs = Net(images)[0] if args.lpr_class_predict else Net(images)
             preb_labels = self.greedy_decode(prebs)
             Tp, Tn_1, Tn_2 = self.check_lables(
                 preb_labels, targets, lp_class, Tp, Tn_1, Tn_2,require_showLable=args.require_showLable

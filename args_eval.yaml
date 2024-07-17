@@ -1,7 +1,7 @@
 cuda: True
 num_workers: 8
 test_batch_size: 256
-pretrained_model: weights/O_fix-10e-.981acc.pth
+pretrained_model: weights/classify-10e-.986acc.pth
 require_showLable: True
 
 img_size: [94, 24]
@@ -12,6 +12,11 @@ CBLtrain: "data/CBLPRD-330k_v1/train.txt"
 CBLval: "data/CBLPRD-330k_v1/val.txt"
 save_folder: './weights/'
 tb_log_dir: null  # 'runs/May29_10-53-54_willing-MS-7A38' null
+# model
+model_name: MS_CTC_classify
+lpr_max_len: 8 #license plate number max length.
+lpr_class_predict: True
+lpr_CTC_predict: True
 # train opt.
 # max_epoch: 5
 init_epoch: 0
@@ -20,11 +25,8 @@ epoch_p_save: 3
 epoch_p_test: 1
 # learn paramaters
 train_batch_size: 256
-
 learning_rate: 0.001
 lr_schedule: [4, 8, 12, 14, 16]
 momentum: 0.9
 weight_decay: 2e-5
-# model
-dropout_rate: 0.5
-lpr_max_len: 8 #license plate number max length.
+

@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 import data
-from data import  CHARS_DICT, LPRDataLoader,CBLDataLoader,CBLdata2iter
+from data import  CHARS_DICT,CBLDataLoader,CBLdata2iter
 from data.CBLchars import CHARS ,LP_CLASS
 
-from model.LPRNet import build_lprnet
-from model import LPRRRNet,T_LENGTH,init_net_weight,myNet,O_fix,attn_predictNet
-# import torch.backends.cudnn as cudnn
-from torch.autograd import Variable
-import torch.nn.functional as F
+
+from model import T_LENGTH,init_net_weight,MS_attn
+
 from torch.utils.data import *
 from torch.utils.tensorboard import SummaryWriter
 
@@ -21,18 +19,21 @@ import os
 from d2l import torch as d2l
 from dynaconf import Dynaconf
 
+import model
 def creat_net(args):
-    lprnet = build_lprnet(lpr_max_len=args.lpr_max_len, class_num=len(CHARS), dropout_rate=args.dropout_rate)
-    device = torch.device("cuda:0" if args.cuda else "cpu")
-    lprnet.to(device)
-    mynet=attn_predictNet(len(CHARS))
+    
+    try:
+        NetClass= getattr(model,args.model_name)
+    except:
+        raise ValueError(f"args.model_name={args.model_name} can't find in model")
+    mynet=NetClass(len(CHARS))
+    
     print("Successful to build network!")
     return  mynet
 
 
 def creat_optim(lprnet,args):
-    # optimizer = optim.SGD(lprnet.parameters(), lr=args.learning_rate,
-    # momentum=args.momentum, weight_decay=args.weight_decay)
+    
     optimizer = (
         optim.RMSprop(
             lprnet.parameters(),
@@ -140,19 +141,19 @@ def train(conf_file:str):
         num_workers=args.num_workers,
     )
     # init net
-    lprnet=creat_net(args)
-    init_net_weight(lprnet,args)
+    net=creat_net(args)
+    init_net_weight(net,args)
     # define optimizer, loss
-    optimizer,LPR_loss,LP_class_loss=creat_optim(lprnet,args)
+    optimizer,LPR_loss,LP_class_loss=creat_optim(net,args)
 
     # ready to train
     if not os.path.exists(args.save_folder):
         os.mkdir(args.save_folder)
     device = torch.device("cuda:0" if args.cuda else "cpu")
-    lprnet.to(device)
+    net.to(device)
     
     Tboard_writer = SummaryWriter(args.tb_log_dir)
-    Tboard_writer.add_graph(lprnet, torch.randn(1,3,24,94).cuda())  #模型及模型输入数据
+    Tboard_writer.add_graph(net, torch.randn(1,3,24,94).cuda())  #模型及模型输入数据
     # Continue training for additional epochs
     init_epochs = args.init_epoch
     add_epochs = args.add_epochs
@@ -161,19 +162,19 @@ def train(conf_file:str):
 
     for epoch_num in range(init_epochs,end_epochs):
         # metric = d2l.Accumulator(3)
-        lprnet.train()
+        net.train()
         if epoch_num%args.epoch_p_save==0 and epoch_num!=0:
-            torch.save(lprnet.state_dict(), args.save_folder + 'LPRNet_' + '_epoch_' + repr(epoch_num) + '.pth')
+            torch.save(net.state_dict(), args.save_folder + 'LPRNet_' + '_epoch_' + repr(epoch_num) + '.pth')
         if epoch_num%args.epoch_p_test==0 and epoch_num!=0:
-            val_acc= Eval_CTC(lprnet, test_iter, args) if args.lpr_CTC_predict else Greedy_eval_attn(lprnet, test_iter, args)
+            val_acc= Eval_CTC(net, test_iter, args) if args.lpr_CTC_predict else Greedy_eval_attn(net, test_iter, args)
             # animatior.add(epoch_num,(None,None,val_acc))
             Tboard_writer.add_scalar('train/valAcc', val_acc, epoch_num*epoch_size)
-            for name,param in lprnet.named_parameters():
+            for name,param in net.named_parameters():
                 Tboard_writer.add_histogram(name,param.clone().cpu().data.numpy(),epoch_num)
         for i,(images, labels, lengths, lp_classes)in enumerate(train_iter):
             
             if not args.lpr_CTC_predict:
-                train_step_attn(args,images,labels,lengths,device,lprnet,optimizer,LPR_loss,epoch_num,end_epochs,i,epoch_size,Tboard_writer)
+                train_step_attn(args,images,labels,lengths,device,net,optimizer,LPR_loss,epoch_num,end_epochs,i,epoch_size,Tboard_writer)
                 continue
             start_time = time.time()
             images=images.to(device)
@@ -185,9 +186,9 @@ def train(conf_file:str):
             lr = adjust_learning_rate(optimizer, epoch_num, args.learning_rate, args.lr_schedule)
             # forward
             if args.lpr_class_predict:
-                logits,lp_class_hat=lprnet(images)
+                logits,lp_class_hat=net(images)
             else:
-                logits = lprnet(images)
+                logits = net(images)
             log_probs = logits.permute(2, 0, 1) # for ctc loss: T x N x C
             # print(labels.shape)
             log_probs = log_probs.log_softmax(2).requires_grad_()
@@ -222,12 +223,12 @@ def train(conf_file:str):
 
     # final test
     print("Final test Accuracy:")
-    val_acc=Eval_CTC(lprnet, test_iter, args) if args.lpr_CTC_predict else Greedy_eval_attn(lprnet, test_iter, args)
+    val_acc=Eval_CTC(net, test_iter, args) if args.lpr_CTC_predict else Greedy_eval_attn(net, test_iter, args)
     # animatior.add(epochs_num,(None,None,val_acc))
     Tboard_writer.add_scalar('train/valAcc', val_acc, end_epochs*epoch_size)
 
     # save final parameters
-    torch.save(lprnet.state_dict(), args.save_folder + 'Final_LPRNet_model.pth')
+    torch.save(net.state_dict(), args.save_folder + 'Final_LPRNet_model.pth')
 
 def unpack_lables(labels,lengths):
     start = 0
@@ -277,7 +278,7 @@ def check_lables(preb_labels,targets,lp_class,*Tn):
             # print(f"{label}|{targets[i]}")
     return Tp, Tn_1, Tn_2
 
-def infer_attn(Net:attn_predictNet,imgs:torch.Tensor,args):# TODO untested func
+def infer_attn(Net:MS_attn,imgs:torch.Tensor,args):# TODO untested func
     Net.eval()
     device = torch.device("cuda:0" if args.cuda else "cpu")
     imgs = imgs.to(device)
@@ -290,7 +291,7 @@ def infer_attn(Net:attn_predictNet,imgs:torch.Tensor,args):# TODO untested func
     
     for i in range(9):
         y_hat_char, h_0 = Net.forward_dec(x_char, h_0)
-        x_char = torch.argmax(y_hat_char, dim=1, keepdim=True)
+        x_char = torch.argmax(y_hat_char, dim=1, keepdim=False)
         generated_sequence.append(x_char)
     
     generated_sequence = torch.cat(generated_sequence, dim=0).cpu().numpy()
@@ -305,7 +306,7 @@ def infer_attn(Net:attn_predictNet,imgs:torch.Tensor,args):# TODO untested func
     
     return result_strings
 
-def Greedy_eval_attn(Net:attn_predictNet,testIter,args):
+def Greedy_eval_attn(Net:MS_attn,testIter,args):
     Net.eval()
     device = torch.device("cuda:0" if args.cuda else "cpu")
     test_num_allSeq,test_num_errSeq,test_numCorrectSeq=0,0,0

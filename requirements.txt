@@ -1,8 +1,8 @@
 # Usage: pip install -r requirements.txt
-torch
+
 python-box
 opencv-python
-mutils
+
 Pillow
 numpy
 tensorboard
